@@ -1,0 +1,6 @@
+@Sonirama.Api_HostAddress = http://localhost:5105
+
+GET {{Sonirama.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
