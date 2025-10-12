@@ -1,6 +1,6 @@
 # new-sonirama-website
 
-A modern web application built with .NET 9 and React (Vite).
+A modern web application built with .NET 9 and React (Vite) with TypeScript.
 
 ## Project Structure
 
@@ -12,11 +12,12 @@ A modern web application built with .NET 9 and React (Vite).
 │       ├── Program.cs
 │       ├── Sonirama.Api.csproj
 │       └── ...
-└── webapp/                   # Vite + React frontend
+└── webapp/                   # Vite + React + TypeScript frontend
     ├── src/
     ├── public/
     ├── package.json
-    └── vite.config.js
+    ├── tsconfig.json
+    └── vite.config.ts
 ```
 
 ## Prerequisites
