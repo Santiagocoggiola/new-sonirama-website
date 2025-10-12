@@ -1,41 +1,102 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Sonirama.Api.Application.Auth;
+using Sonirama.Api.Application.Common.Interfaces;
+using Sonirama.Api.Domain.Entities;
+using Sonirama.Api.Infrastructure;
+using Sonirama.Api.Infrastructure.Auth;
+using Sonirama.Api.Infrastructure.Init;
+using Sonirama.Api.Infrastructure.Repositories;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// Configuración
+var configuration = builder.Configuration;
+
+// Add services
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
+
+// EF Core MySQL (Pomelo)
+var connectionString = configuration.GetConnectionString("Default");
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+});
+
+// Options
+builder.Services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
+builder.Services.Configure<AdminSeedOptions>(configuration.GetSection("AdminSeed"));
+
+// Identity util: Password hasher
+builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
+
+// Repositorios
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+// Servicios
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<DataSeeder>();
+
+// Autenticación JWT
+var jwtSection = configuration.GetSection("Jwt");
+var issuer = jwtSection["Issuer"]!;
+var audience = jwtSection["Audience"]!;
+var key = jwtSection["Key"]!;
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateIssuerSigningKey = true,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.FromSeconds(30),
+        ValidIssuer = issuer,
+        ValidAudience = audience,
+        IssuerSigningKey = signingKey
+    };
+});
+
+builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Seed DB/Admin (tolerante a errores si DB no disponible)
+try
+{
+    using var scope = app.Services.CreateScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
+    await seeder.InitializeAsync();
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[WARN] No se pudo inicializar datos: {ex.Message}");
+}
+
+// Pipeline
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
