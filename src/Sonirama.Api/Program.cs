@@ -20,11 +20,11 @@ var configuration = builder.Configuration;
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
 
-// EF Core MySQL (Pomelo)
+// EF Core PostgreSQL (Npgsql)
 var connectionString = configuration.GetConnectionString("Default");
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+    options.UseNpgsql(connectionString);
 });
 
 // Options
@@ -75,10 +75,12 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Seed DB/Admin (tolerante a errores si DB no disponible)
+// Migraciones + Seed DB/Admin (tolerante a errores si DB no disponible)
 try
 {
     using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
     var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
     await seeder.InitializeAsync();
 }

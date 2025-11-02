@@ -14,8 +14,6 @@ public sealed class DataSeeder(
 {
     public async Task InitializeAsync(CancellationToken ct = default)
     {
-        await db.Database.EnsureCreatedAsync(ct);
-
         var opts = adminOptions.Value;
         if (string.IsNullOrWhiteSpace(opts.Email) || string.IsNullOrWhiteSpace(opts.Password))
             return;

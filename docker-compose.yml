@@ -1,28 +1,26 @@
 ﻿version: "3.9"
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: sonirama-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: sonirama-postgres
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: sonirama
-      MYSQL_USER: app_user
-      MYSQL_PASSWORD: change_me
-      MYSQL_ROOT_PASSWORD: root_password_change_me
+      POSTGRES_DB: sonirama
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: change_me
       TZ: America/Argentina/Buenos_Aires
-    command: ["--default-authentication-plugin=mysql_native_password","--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} || exit 1"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
 
 volumes:
-  mysql_data:
+  postgres_data:
     driver: local

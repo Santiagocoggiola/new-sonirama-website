@@ -1,0 +1,16 @@
+/* Global base styles (no Tailwind) */
+html, body {
+	padding: 0;
+	margin: 0;
+}
+body {
+	font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Improve spacing for PrimeReact inputs with left icons */
+.p-input-icon-left > .p-inputtext {
+	padding-left: 2.75rem; /* default is tighter; give text more breathing room */
+}
+.p-input-icon-left > i {
+	left: 0.9rem; /* nudge icon slightly to avoid touching the border */
+}
