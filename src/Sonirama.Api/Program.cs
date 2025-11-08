@@ -10,6 +10,13 @@ using Sonirama.Api.Infrastructure;
 using Sonirama.Api.Infrastructure.Auth;
 using Sonirama.Api.Infrastructure.Init;
 using Sonirama.Api.Infrastructure.Repositories;
+using Sonirama.Api.Infrastructure.Email;
+using Sonirama.Api.Infrastructure.Security;
+using Sonirama.Api.Application.Users;
+using Sonirama.Api.Application.Products;
+using Sonirama.Api.Application.Products.Discounts;
+using AutoMapper;
+using Sonirama.Api.Infrastructure.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +26,11 @@ var configuration = builder.Configuration;
 // Add services
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddAutoMapper(
+    typeof(Sonirama.Api.Application.Users.Mapping.UserProfile),
+    typeof(Sonirama.Api.Application.Products.Mapping.ProductProfile),
+    typeof(Sonirama.Api.Application.Products.Discounts.Mapping.BulkDiscountProfile)
+);
 
 // EF Core PostgreSQL (Npgsql)
 var connectionString = configuration.GetConnectionString("Default");
@@ -37,11 +49,19 @@ builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
 // Repositorios
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
+builder.Services.AddScoped<IBulkDiscountRepository, BulkDiscountRepository>();
 
 // Servicios
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DataSeeder>();
+builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
+builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IBulkDiscountService, BulkDiscountService>();
 
 // Autenticación JWT
 var jwtSection = configuration.GetSection("Jwt");
@@ -99,6 +119,9 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Global exception handling (custom domain exceptions -> JSON)
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();

@@ -21,5 +21,21 @@ public sealed class RefreshTokenRepository(AppDbContext db) : IRefreshTokenRepos
         db.RefreshTokens.Update(refreshToken);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<int> RevokeAllForUserAsync(Guid userId, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var tokens = await db.RefreshTokens
+            .Where(t => t.UserId == userId && t.RevokedAtUtc == null && t.ExpiresAtUtc > now)
+            .ToListAsync(ct);
+
+        foreach (var t in tokens)
+        {
+            t.RevokedAtUtc = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+        return tokens.Count;
+    }
 }
 

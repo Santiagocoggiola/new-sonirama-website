@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Sonirama.Api.Application.Auth.Dtos;
+using Sonirama.Api.Application.Common.Exceptions;
 using Sonirama.Api.Application.Common.Interfaces;
 using Sonirama.Api.Domain.Entities;
 
@@ -18,13 +19,13 @@ public sealed class AuthService(
 
     public async Task<AuthResponse> LoginAsync(string email, string password, CancellationToken ct)
     {
-        var user = await users.GetByEmailAsync(email, ct) ?? throw new UnauthorizedAccessException("Credenciales inválidas");
+        var user = await users.GetByEmailAsync(email, ct) ?? throw new UnauthorizedDomainException("Credenciales inválidas");
         if (!user.IsActive)
-            throw new UnauthorizedAccessException("Usuario inactivo");
+            throw new UnauthorizedDomainException("Usuario inactivo");
 
         var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (result == PasswordVerificationResult.Failed)
-            throw new UnauthorizedAccessException("Credenciales inválidas");
+            throw new UnauthorizedDomainException("Credenciales inválidas");
 
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
         {
@@ -47,13 +48,13 @@ public sealed class AuthService(
 
     public async Task<AuthResponse> RefreshAsync(string refreshToken, CancellationToken ct)
     {
-        var stored = await refreshTokens.GetByTokenAsync(refreshToken, ct) ?? throw new UnauthorizedAccessException("Refresh token inválido");
+        var stored = await refreshTokens.GetByTokenAsync(refreshToken, ct) ?? throw new UnauthorizedDomainException("Refresh token inválido");
         if (!stored.IsActive)
-            throw new UnauthorizedAccessException("Refresh token expirado o revocado");
+            throw new UnauthorizedDomainException("Refresh token expirado o revocado");
 
         var user = stored.User;
         if (!user.IsActive)
-            throw new UnauthorizedAccessException("Usuario inactivo");
+            throw new UnauthorizedDomainException("Usuario inactivo");
 
         // Rotar refresh token: revocar el actual y emitir uno nuevo
         stored.RevokedAtUtc = DateTime.UtcNow;
@@ -71,6 +72,19 @@ public sealed class AuthService(
             Email = user.Email
         };
     }
+
+    public async Task LogoutAsync(string refreshToken, CancellationToken ct)
+    {
+        var stored = await refreshTokens.GetByTokenAsync(refreshToken, ct) ?? throw new UnauthorizedDomainException("Refresh token inválido");
+        if (!stored.IsActive)
+            throw new UnauthorizedDomainException("Refresh token expirado o revocado");
+
+        stored.RevokedAtUtc = DateTime.UtcNow;
+        await refreshTokens.UpdateAsync(stored, ct);
+    }
+
+    public async Task<int> LogoutAllAsync(Guid userId, CancellationToken ct)
+        => await refreshTokens.RevokeAllForUserAsync(userId, ct);
 
     private async Task<RefreshToken> CreateAndStoreRefreshTokenAsync(User user, CancellationToken ct)
     {

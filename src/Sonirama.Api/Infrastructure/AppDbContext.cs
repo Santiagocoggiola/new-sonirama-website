@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Sonirama.Api.Domain.Entities;
+using Sonirama.Api.Infrastructure.Configurations;
 
 namespace Sonirama.Api.Infrastructure;
 
@@ -7,24 +8,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+    public DbSet<PasswordResetRequest> PasswordResetRequests => Set<PasswordResetRequest>();
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<BulkDiscount> BulkDiscounts => Set<BulkDiscount>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<User>(b =>
-        {
-            b.HasKey(x => x.Id);
-            b.HasIndex(x => x.Email).IsUnique();
-            b.Property(x => x.Email).IsRequired();
-            b.Property(x => x.PasswordHash).IsRequired();
-            b.Property(x => x.Role).IsRequired();
-            b.Property(x => x.IsActive).HasDefaultValue(true);
-            b.HasMany(x => x.RefreshTokens)
-                .WithOne(rt => rt.User)
-                .HasForeignKey(rt => rt.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
+        modelBuilder.ApplyConfiguration(new UserConfiguration());
+        modelBuilder.ApplyConfiguration(new PasswordResetRequestConfiguration());
+        modelBuilder.ApplyConfiguration(new ProductConfiguration());
+        modelBuilder.ApplyConfiguration(new BulkDiscountConfiguration());
 
         modelBuilder.Entity<RefreshToken>(b =>
         {
