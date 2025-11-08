@@ -109,4 +109,68 @@ public class ProductServiceTests
         result.Items.Should().HaveCount(1);
         result.Items[0].Code.Should().Be("P001");
     }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldSucceed_AndPreserveCode()
+    {
+        var id = Guid.NewGuid();
+        var entity = new Product { Id = id, Code = "P001", Name = "Old", Price = 10m, IsActive = true };
+        _products.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        _products.Setup(r => r.UpdateAsync(entity, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = CreateSut();
+        var dto = await sut.UpdateAsync(id, new ProductUpdateRequest
+        {
+            Name = "New",
+            Description = "Desc",
+            Category = "Cat",
+            Price = 20m,
+            Currency = "ARS",
+            StockQuantity = 3,
+            IsActive = true
+        }, CancellationToken.None);
+
+        dto.Code.Should().Be("P001");
+        dto.Name.Should().Be("New");
+        _products.Verify(r => r.UpdateAsync(entity, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldMarkInactive()
+    {
+        var id = Guid.NewGuid();
+        var entity = new Product { Id = id, Code = "P001", Name = "X", Price = 10m, IsActive = true };
+        _products.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(entity);
+        _products.Setup(r => r.DeleteAsync(entity, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask)
+                 .Callback<Product, CancellationToken>((p, _) => p.IsActive = false);
+
+        var sut = CreateSut();
+        await sut.DeleteAsync(id, CancellationToken.None);
+        entity.IsActive.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ListAsync_ShouldApplyFilters_AndSorting()
+    {
+        var paged = new PagedResult<Product> { Page = 1, PageSize = 10, TotalCount = 0, Items = new List<Product>() };
+        _products.Setup(r => r.ListAsync(It.Is<ProductListFilter>(f => f.PriceMin == 10m && f.PriceMax == 100m && f.IsActive == true && f.Query == "pro" && f.SortBy == "Price" && f.SortDir == "ASC"), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(paged);
+
+        var sut = CreateSut();
+        var result = await sut.ListAsync(new ProductFilterRequest { Page = 1, PageSize = 10, PriceMin = 10m, PriceMax = 100m, IsActive = true, Query = "pro", SortBy = "Price", SortDir = "ASC" }, CancellationToken.None);
+        result.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ListAsync_ShouldPassCategoryIds_WithDescendants()
+    {
+        var paged = new PagedResult<Product> { Page = 1, PageSize = 10, TotalCount = 0, Items = new List<Product>() };
+        var cat = Guid.NewGuid();
+        _products.Setup(r => r.ListAsync(It.Is<ProductListFilter>(f => f.CategoryIds != null && System.Linq.Enumerable.Any(f.CategoryIds, x => x == cat)), It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(paged);
+
+        var sut = CreateSut();
+        var result = await sut.ListAsync(new ProductFilterRequest { Page = 1, PageSize = 10, CategoryIds = new List<Guid> { cat } }, CancellationToken.None);
+        result.TotalCount.Should().Be(0);
+    }
 }

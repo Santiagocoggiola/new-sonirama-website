@@ -116,4 +116,44 @@ public class UserServiceTests
         result.TotalCount.Should().Be(1);
         result.Items.Should().HaveCount(1);
     }
+
+    [Fact]
+    public async Task UpdateAsync_ShouldUpdate_WhenExists()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "a@b.com", FirstName = "A", LastName = "B", Role = Role.User, PasswordHash = "H", IsActive = true };
+        _users.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _users.Setup(r => r.UpdateAsync(user, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = CreateSut();
+    var dto = await sut.UpdateAsync(user.Id, new UserUpdateRequest { FirstName = "AA", LastName = "BB", Role = Role.Admin, IsActive = true }, CancellationToken.None);
+    dto.Should().NotBeNull();
+    dto!.FirstName.Should().Be("AA");
+    dto.Role.Should().Be(Role.Admin);
+        _users.Verify(r => r.UpdateAsync(user, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldSoftDelete_WhenExists()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "a@b.com", FirstName = "A", LastName = "B", Role = Role.User, PasswordHash = "H", IsActive = true };
+        _users.Setup(r => r.GetByIdAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        _users.Setup(r => r.DeleteAsync(user, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = CreateSut();
+        var ok = await sut.DeleteAsync(user.Id, CancellationToken.None);
+        ok.Should().BeTrue();
+        _users.Verify(r => r.DeleteAsync(user, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ListAsync_ShouldPassFilters_ToRepository()
+    {
+        var paged = new PagedResult<User> { Page = 1, PageSize = 10, TotalCount = 0, Items = new List<User>() };
+        _users.Setup(r => r.ListAsync(It.Is<UserListFilter>(f => f.Role == Role.Admin && f.IsActive == true && f.Query == "jo"), It.IsAny<CancellationToken>()))
+              .ReturnsAsync(paged);
+
+        var sut = CreateSut();
+        var result = await sut.ListAsync(new UserFilterRequest { Page = 1, PageSize = 10, Role = Role.Admin, IsActive = true, Query = "jo" }, CancellationToken.None);
+        result.TotalCount.Should().Be(0);
+    }
 }

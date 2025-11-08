@@ -7,6 +7,7 @@ public sealed class ProductListFilter
     public int PageSize { get; set; } = 20;
     public string? Query { get; set; }
     public string? Category { get; set; }
+    public IReadOnlyCollection<Guid>? CategoryIds { get; set; } // filter by categories (including descendants)
     public decimal? PriceMin { get; set; }
     public decimal? PriceMax { get; set; }
     public bool? IsActive { get; set; }

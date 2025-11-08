@@ -86,6 +86,7 @@ public sealed class ProductService : IProductService
             PageSize = filter.PageSize,
             Query = filter.Query,
             Category = filter.Category,
+            CategoryIds = filter.CategoryIds,
             PriceMin = filter.PriceMin,
             PriceMax = filter.PriceMax,
             IsActive = filter.IsActive,

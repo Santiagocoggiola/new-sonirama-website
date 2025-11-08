@@ -7,6 +7,7 @@ public sealed class ProductFilterRequest
     public int PageSize { get; set; } = 20;
     public string? Query { get; set; } // matches Code, Name, Category
     public string? Category { get; set; }
+    public List<Guid>? CategoryIds { get; set; }
     public decimal? PriceMin { get; set; }
     public decimal? PriceMax { get; set; }
     public bool? IsActive { get; set; }

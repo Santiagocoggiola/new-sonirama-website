@@ -80,6 +80,25 @@ public class UserServicePasswordResetTests
     }
 
     [Fact]
+    public async Task ConfirmPasswordResetAsync_ShouldThrow_WhenExpired()
+    {
+        var user = new User { Id = Guid.NewGuid(), Email = "user@ex.com", FirstName = "U", LastName = "L", Role = Role.User, IsActive = true, PasswordHash = "H" };
+        _users.Setup(r => r.GetByEmailAsync(user.Email, It.IsAny<CancellationToken>())).ReturnsAsync(user);
+        // Repository should return null for expired requests
+        _resets.Setup(r => r.GetActiveByUserAsync(user.Id, It.IsAny<CancellationToken>())).ReturnsAsync((PasswordResetRequest?)null);
+        var sut = CreateSut();
+        await Assert.ThrowsAsync<ValidationException>(() => sut.ConfirmPasswordResetAsync(user.Email, "123456", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ForcePasswordResetAsync_ShouldThrow_WhenUserNotFound()
+    {
+        _users.Setup(r => r.GetByIdAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>())).ReturnsAsync((User?)null);
+        var sut = CreateSut();
+        await Assert.ThrowsAsync<NotFoundException>(() => sut.ForcePasswordResetAsync(Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ConfirmPasswordResetAsync_ShouldSucceed_WhenValidCode()
     {
         var user = new User { Id = Guid.NewGuid(), Email = "user@ex.com", FirstName = "U", LastName = "L", Role = Role.User, IsActive = true, PasswordHash = "OLD" };

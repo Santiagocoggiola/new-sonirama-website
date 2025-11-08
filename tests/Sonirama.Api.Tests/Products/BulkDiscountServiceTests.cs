@@ -101,4 +101,48 @@ public class BulkDiscountServiceTests
         var sut = CreateSut();
         await Assert.ThrowsAsync<NotFoundException>(() => sut.DeleteAsync(Guid.NewGuid(), CancellationToken.None));
     }
+
+    [Fact]
+    public async Task ListByProductAsync_ShouldReturnDiscounts_WhenProductExists()
+    {
+        var productId = Guid.NewGuid();
+        _products.Setup(r => r.GetByIdAsync(productId, It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(new Product { Id = productId, Code = "P" });
+        _discounts.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
+                  .ReturnsAsync(new List<BulkDiscount> { new() { Id = Guid.NewGuid(), ProductId = productId, MinQuantity = 3, DiscountPercent = 5m } });
+
+        var sut = CreateSut();
+        var list = await sut.ListByProductAsync(productId, CancellationToken.None);
+        list.Should().HaveCount(1);
+        list[0].MinQuantity.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ShouldSucceed_WhenUniqueMinQuantity()
+    {
+        var productId = Guid.NewGuid();
+        _products.Setup(r => r.GetByIdAsync(productId, It.IsAny<CancellationToken>()))
+                 .ReturnsAsync(new Product { Id = productId, Code = "P" });
+        _discounts.Setup(r => r.GetByProductAsync(productId, It.IsAny<CancellationToken>()))
+                  .ReturnsAsync(new List<BulkDiscount>());
+        _discounts.Setup(r => r.AddAsync(It.IsAny<BulkDiscount>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = CreateSut();
+        var dto = await sut.CreateAsync(productId, new BulkDiscountCreateRequest { MinQuantity = 10, DiscountPercent = 15m, IsActive = true }, CancellationToken.None);
+        dto.MinQuantity.Should().Be(10);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldSucceed_WhenExists()
+    {
+        var id = Guid.NewGuid();
+        var entity = new BulkDiscount { Id = id, ProductId = Guid.NewGuid(), MinQuantity = 5, DiscountPercent = 10m };
+        _discounts.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>()))
+                  .ReturnsAsync(entity);
+        _discounts.Setup(r => r.DeleteAsync(entity, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        var sut = CreateSut();
+        await sut.DeleteAsync(id, CancellationToken.None);
+        _discounts.Verify(r => r.DeleteAsync(entity, It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

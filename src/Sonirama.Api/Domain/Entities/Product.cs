@@ -17,4 +17,5 @@ public sealed class Product
     public DateTime? UpdatedAtUtc { get; set; }
 
     public ICollection<BulkDiscount> BulkDiscounts { get; set; } = new List<BulkDiscount>();
+    public ICollection<ProductCategory> ProductsLink { get; set; } = new List<ProductCategory>();
 }

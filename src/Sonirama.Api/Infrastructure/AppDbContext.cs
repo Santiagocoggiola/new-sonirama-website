@@ -11,6 +11,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PasswordResetRequest> PasswordResetRequests => Set<PasswordResetRequest>();
     public DbSet<Product> Products => Set<Product>();
     public DbSet<BulkDiscount> BulkDiscounts => Set<BulkDiscount>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<CategoryRelation> CategoryRelations => Set<CategoryRelation>();
+    public DbSet<ProductCategory> ProductCategories => Set<ProductCategory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -18,8 +21,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.ApplyConfiguration(new UserConfiguration());
         modelBuilder.ApplyConfiguration(new PasswordResetRequestConfiguration());
-        modelBuilder.ApplyConfiguration(new ProductConfiguration());
-        modelBuilder.ApplyConfiguration(new BulkDiscountConfiguration());
+    modelBuilder.ApplyConfiguration(new ProductConfiguration());
+    modelBuilder.ApplyConfiguration(new BulkDiscountConfiguration());
+    modelBuilder.ApplyConfiguration(new CategoryConfiguration());
+    modelBuilder.ApplyConfiguration(new CategoryRelationConfiguration());
+    modelBuilder.ApplyConfiguration(new ProductCategoryConfiguration());
 
         modelBuilder.Entity<RefreshToken>(b =>
         {

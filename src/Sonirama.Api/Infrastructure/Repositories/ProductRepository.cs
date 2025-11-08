@@ -44,6 +44,28 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
             q = q.Where(p => p.IsActive == filter.IsActive.Value);
         }
 
+        // Filter by CategoryIds (including descendants) using ProductCategories + CategoryRelations.
+        if (filter.CategoryIds != null && filter.CategoryIds.Count > 0)
+        {
+            // Build full set (provided + descendants) via BFS over CategoryRelations.
+            var targetIds = new HashSet<Guid>(filter.CategoryIds);
+            var queue = new Queue<Guid>(filter.CategoryIds);
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                var children = await db.CategoryRelations
+                    .Where(r => r.ParentId == current)
+                    .Select(r => r.ChildId)
+                    .ToListAsync(ct);
+                foreach (var child in children)
+                {
+                    if (targetIds.Add(child)) queue.Enqueue(child);
+                }
+            }
+
+            q = q.Where(p => db.ProductCategories.Any(pc => pc.ProductId == p.Id && targetIds.Contains(pc.CategoryId)));
+        }
+
         var sortDir = (filter.SortDir ?? "DESC").ToUpperInvariant();
         q = (filter.SortBy ?? "CreatedAt") switch
         {
@@ -58,6 +80,7 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
             .Include(p => p.BulkDiscounts)
+            .Include(p => p.ProductsLink)
             .ToListAsync(ct);
 
         return new PagedResult<Product>

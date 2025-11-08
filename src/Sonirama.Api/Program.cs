@@ -15,6 +15,7 @@ using Sonirama.Api.Infrastructure.Security;
 using Sonirama.Api.Application.Users;
 using Sonirama.Api.Application.Products;
 using Sonirama.Api.Application.Products.Discounts;
+using Sonirama.Api.Application.Categories;
 using AutoMapper;
 using Sonirama.Api.Infrastructure.Middleware;
 
@@ -30,6 +31,7 @@ builder.Services.AddAutoMapper(
     typeof(Sonirama.Api.Application.Users.Mapping.UserProfile),
     typeof(Sonirama.Api.Application.Products.Mapping.ProductProfile),
     typeof(Sonirama.Api.Application.Products.Discounts.Mapping.BulkDiscountProfile)
+    , typeof(Sonirama.Api.Application.Categories.Mapping.CategoryProfile)
 );
 
 // EF Core PostgreSQL (Npgsql)
@@ -62,6 +64,8 @@ builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IBulkDiscountService, BulkDiscountService>();
+builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
 
 // Autenticación JWT
 var jwtSection = configuration.GetSection("Jwt");
