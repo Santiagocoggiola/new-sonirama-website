@@ -16,8 +16,12 @@ using Sonirama.Api.Application.Users;
 using Sonirama.Api.Application.Products;
 using Sonirama.Api.Application.Products.Discounts;
 using Sonirama.Api.Application.Categories;
+using Sonirama.Api.Application.Carts;
 using AutoMapper;
 using Sonirama.Api.Infrastructure.Middleware;
+using Sonirama.Api.Application.Orders;
+using Sonirama.Api.Infrastructure.Notifications;
+using Sonirama.Api.Infrastructure.Images;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +31,7 @@ var configuration = builder.Configuration;
 // Add services
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddAutoMapper(
     typeof(Sonirama.Api.Application.Users.Mapping.UserProfile),
     typeof(Sonirama.Api.Application.Products.Mapping.ProductProfile),
@@ -54,6 +59,9 @@ builder.Services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 builder.Services.AddScoped<IPasswordResetRequestRepository, PasswordResetRequestRepository>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IBulkDiscountRepository, BulkDiscountRepository>();
+builder.Services.AddScoped<ICartRepository, CartRepository>();
+builder.Services.AddScoped<IOrderRepository, OrderRepository>();
+builder.Services.AddScoped<IProductImageRepository, ProductImageRepository>();
 
 // Servicios
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -66,6 +74,10 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IBulkDiscountService, BulkDiscountService>();
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
+builder.Services.AddScoped<IProductImageStorage, ProductImageStorage>();
 
 // Autenticación JWT
 var jwtSection = configuration.GetSection("Jwt");
@@ -120,6 +132,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -127,5 +140,6 @@ app.UseAuthorization();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.MapControllers();
+app.MapHub<OrdersHub>("/hubs/orders");
 
 await app.RunAsync();

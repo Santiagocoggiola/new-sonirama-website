@@ -16,7 +16,6 @@ public sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         b.Property(x => x.Description).HasMaxLength(2000);
         b.Property(x => x.Price).HasPrecision(18, 2);
         b.Property(x => x.Currency).IsRequired().HasMaxLength(3);
-        b.Property(x => x.StockQuantity).IsRequired();
         b.Property(x => x.Category).HasMaxLength(100);
         b.Property(x => x.MinBulkQuantity);
         b.Property(x => x.IsActive).HasDefaultValue(true);

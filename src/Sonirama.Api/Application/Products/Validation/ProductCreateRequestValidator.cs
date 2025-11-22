@@ -13,7 +13,6 @@ public sealed class ProductCreateRequestValidator : AbstractValidator<ProductCre
         RuleFor(x => x.Description).MaximumLength(2000);
         RuleFor(x => x.Price).GreaterThan(0m).LessThan(100000000m);
         RuleFor(x => x.Currency).NotEmpty().Length(3);
-        RuleFor(x => x.StockQuantity).GreaterThanOrEqualTo(0);
         RuleFor(x => x.Category).MaximumLength(100);
     }
 }

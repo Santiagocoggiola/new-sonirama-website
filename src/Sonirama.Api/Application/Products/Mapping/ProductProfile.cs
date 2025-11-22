@@ -9,6 +9,7 @@ public sealed class ProductProfile : Profile
 {
     public ProductProfile()
     {
+        CreateMap<ProductImage, ProductImageDto>();
         CreateMap<Product, ProductDto>();
         CreateMap<ProductCreateRequest, Product>();
         CreateMap<ProductUpdateRequest, Product>();

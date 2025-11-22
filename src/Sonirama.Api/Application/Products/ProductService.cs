@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Sonirama.Api.Application.Common.Interfaces;
 using Sonirama.Api.Application.Common.Dtos; // PagedResult
@@ -6,18 +7,31 @@ using Sonirama.Api.Application.Common.Models; // ProductListFilter
 using Sonirama.Api.Application.Products.Dtos;
 using Sonirama.Api.Domain.Entities;
 using Sonirama.Api.Application.Common.Exceptions;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Sonirama.Api.Application.Products;
 
 public sealed class ProductService : IProductService
 {
     private const string NotFoundMessage = "Producto no encontrado.";
+    private const string ImageNotFoundMessage = "Imagen no encontrada.";
+    private const int MaxImagesPerUpload = 10;
     private readonly IProductRepository _productRepo;
+    private readonly IProductImageRepository _imageRepo;
+    private readonly IProductImageStorage _imageStorage;
     private readonly IMapper _mapper;
 
-    public ProductService(IProductRepository productRepo, IBulkDiscountRepository discountRepo, IMapper mapper)
+    public ProductService(
+        IProductRepository productRepo,
+        IBulkDiscountRepository discountRepo,
+        IProductImageRepository imageRepo,
+        IProductImageStorage imageStorage,
+        IMapper mapper)
     {
         _productRepo = productRepo;
+        _imageRepo = imageRepo;
+        _imageStorage = imageStorage;
         _mapper = mapper;
         // discountRepo reservado para futura lógica (no usado aún)
         _ = discountRepo;
@@ -31,9 +45,11 @@ public sealed class ProductService : IProductService
         {
             Code = request.Code.Trim(),
             Name = request.Name.Trim(),
+            Description = request.Description?.Trim(),
             Category = request.Category?.Trim(),
             Price = request.Price,
-            IsActive = true,
+            Currency = request.Currency,
+            IsActive = request.IsActive,
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow
         };
@@ -44,7 +60,7 @@ public sealed class ProductService : IProductService
 
     public async Task<ProductDto> UpdateAsync(Guid id, ProductUpdateRequest request, CancellationToken ct)
     {
-    var product = await _productRepo.GetByIdAsync(id, ct) ?? throw new NotFoundException(NotFoundMessage);
+        var product = await _productRepo.GetByIdAsync(id, ct) ?? throw new NotFoundException(NotFoundMessage);
 
         // Código es inmutable; actualizamos resto de propiedades.
         product.Name = request.Name.Trim();
@@ -52,7 +68,6 @@ public sealed class ProductService : IProductService
         product.Category = request.Category?.Trim();
         product.Price = request.Price;
         product.Currency = request.Currency;
-        product.StockQuantity = request.StockQuantity;
         product.IsActive = request.IsActive;
         product.UpdatedAtUtc = DateTime.UtcNow;
 
@@ -101,5 +116,47 @@ public sealed class ProductService : IProductService
             TotalCount = page.TotalCount,
             Items = page.Items.Select(_mapper.Map<ProductDto>).ToList()
         };
+    }
+
+    public async Task<IReadOnlyList<ProductImageDto>> UploadImagesAsync(Guid productId, IEnumerable<IFormFile> files, CancellationToken ct)
+    {
+        var product = await _productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException(NotFoundMessage);
+        var fileList = files?.Where(f => f is not null).ToList() ?? new List<IFormFile>();
+
+        if (fileList.Count == 0)
+        {
+            throw new ValidationException("Debes adjuntar al menos una imagen.");
+        }
+
+        if (fileList.Count > MaxImagesPerUpload)
+        {
+            throw new ValidationException($"Solo puedes subir hasta {MaxImagesPerUpload} imágenes por solicitud.");
+        }
+
+        var storedImages = new List<ProductImage>(fileList.Count);
+
+        foreach (var file in fileList)
+        {
+            var stored = await _imageStorage.SaveAsync(product.Code, file, ct);
+            stored.ProductId = product.Id;
+            storedImages.Add(stored);
+        }
+
+        await _imageRepo.AddRangeAsync(storedImages, ct);
+        return storedImages.Select(_mapper.Map<ProductImageDto>).ToList();
+    }
+
+    public async Task DeleteImageAsync(Guid productId, Guid imageId, CancellationToken ct)
+    {
+        var product = await _productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException(NotFoundMessage);
+        var image = await _imageRepo.GetByIdAsync(imageId, ct) ?? throw new NotFoundException(ImageNotFoundMessage);
+
+        if (image.ProductId != product.Id)
+        {
+            throw new NotFoundException(ImageNotFoundMessage);
+        }
+
+        await _imageStorage.DeleteAsync(image, ct);
+        await _imageRepo.RemoveAsync(image, ct);
     }
 }

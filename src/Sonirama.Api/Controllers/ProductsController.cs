@@ -42,6 +42,24 @@ public sealed class ProductsController(IProductService service) : ControllerBase
     public async Task<IActionResult> UpdateAsync(Guid id, [FromBody] ProductUpdateRequest request, CancellationToken ct)
         => Ok(await service.UpdateAsync(id, request, ct));
 
+    // POST api/products/{id}/images
+    [HttpPost("{id:guid}/images")]
+    [Authorize(Roles = "ADMIN")]
+    [RequestFormLimits(MultipartBodyLengthLimit = 60 * 1024 * 1024)]
+    [RequestSizeLimit(60 * 1024 * 1024)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> UploadImagesAsync(Guid id, [FromForm] ProductImageUploadRequest request, CancellationToken ct)
+        => Ok(await service.UploadImagesAsync(id, request.Files, ct));
+
+    // DELETE api/products/{id}/images/{imageId}
+    [HttpDelete("{id:guid}/images/{imageId:guid}")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<IActionResult> DeleteImageAsync(Guid id, Guid imageId, CancellationToken ct)
+    {
+        await service.DeleteImageAsync(id, imageId, ct);
+        return NoContent();
+    }
+
     // DELETE api/products/{id}
     [HttpDelete("{id:guid}")]
     [Authorize(Roles = "ADMIN")]
