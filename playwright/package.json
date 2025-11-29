@@ -1,0 +1,23 @@
+{
+  "name": "sonirama-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "E2E tests for Sonirama website using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:products": "playwright test products.spec.ts",
+    "test:categories": "playwright test categories.spec.ts",
+    "test:orders": "playwright test orders.spec.ts",
+    "test:full-flow": "playwright test full-flow.spec.ts",
+    "install:browsers": "playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0"
+  }
+}
