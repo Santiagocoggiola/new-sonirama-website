@@ -1,13 +1,19 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+
+// PrimeReact styles
 import "primereact/resources/themes/lara-light-blue/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
-import ThemeToggle from "./ui/theme-toggle";
-import GlobalToast from "@/app/ui/global-toast";
-import ThemeProvider from "./theme-provider";
+
+// Sonirama theme overrides
+import "@/styles/themes/sonirama-light.css";
+import "@/styles/themes/sonirama-dark.css";
+import "@/styles/globals.css";
+
+import { AppProviders } from "@/providers/AppProviders";
+import { GlobalToast } from "@/components/ui/GlobalToast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +27,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Sonirama",
-  description: "Sonirama webapp",
+  description: "Sonirama Marketplace - Tu tienda de audio profesional",
+  keywords: ["audio", "sonido", "equipos", "profesional", "marketplace"],
+  authors: [{ name: "Sonirama" }],
 };
 
 export default function RootLayout({
@@ -31,14 +39,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
-  <body className={`${geistSans.variable} ${geistMono.variable}`}>
-          <ThemeProvider>
-          <div style={{position:'fixed', right: 16, top: 16, zIndex: 10}}>
-            <ThemeToggle />
-          </div>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        <AppProviders>
           <GlobalToast />
           {children}
-          </ThemeProvider>
+        </AppProviders>
       </body>
     </html>
   );

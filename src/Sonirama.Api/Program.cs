@@ -22,6 +22,7 @@ using AutoMapper;
 using Sonirama.Api.Infrastructure.Middleware;
 using Sonirama.Api.Application.Orders;
 using Sonirama.Api.Application.Notifications;
+using Sonirama.Api.Application.Contact;
 using Sonirama.Api.Infrastructure.Notifications;
 using Sonirama.Api.Infrastructure.Images;
 using Sonirama.Api.Infrastructure.Extensions;
@@ -112,13 +113,24 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 3,
                 Window = TimeSpan.FromMinutes(1)
             }));
+    
+    // Política "contact": 3 requests por minuto (prevenir spam de formulario)
+    options.AddPolicy("contact", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = 3,
+                Window = TimeSpan.FromMinutes(1)
+            }));
 });
 
 builder.Services.AddAutoMapper(
     typeof(Sonirama.Api.Application.Users.Mapping.UserProfile),
     typeof(Sonirama.Api.Application.Products.Mapping.ProductProfile),
-    typeof(Sonirama.Api.Application.Products.Discounts.Mapping.BulkDiscountProfile)
-    , typeof(Sonirama.Api.Application.Categories.Mapping.CategoryProfile)
+    typeof(Sonirama.Api.Application.Products.Discounts.Mapping.BulkDiscountProfile),
+    typeof(Sonirama.Api.Application.Categories.Mapping.CategoryProfile)
 );
 
 // EF Core PostgreSQL (Npgsql)
@@ -178,6 +190,10 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IOrderNotificationService, OrderNotificationService>();
 builder.Services.AddScoped<IProductImageStorage, ProductImageStorage>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+
+// Contact service
+builder.Services.Configure<ContactOptions>(configuration.GetSection("Contact"));
+builder.Services.AddScoped<IContactService, ContactService>();
 
 // Autenticación JWT
 var jwtSection = configuration.GetSection("Jwt");

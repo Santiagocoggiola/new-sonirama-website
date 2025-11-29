@@ -1,0 +1,207 @@
+/**
+ * Sonirama Design Tokens
+ * Primary color: #005B8A
+ */
+
+:root {
+  /* Primary colors */
+  --primary-color: #005B8A;
+  --primary-color-light: #0077B6;
+  --primary-color-lighter: #0096C7;
+  --primary-color-dark: #003D5C;
+  --primary-color-darker: #002A40;
+  
+  /* Primary with opacity */
+  --primary-color-10: rgba(0, 91, 138, 0.1);
+  --primary-color-20: rgba(0, 91, 138, 0.2);
+  --primary-color-50: rgba(0, 91, 138, 0.5);
+  
+  /* Semantic colors */
+  --success-color: #22C55E;
+  --success-color-light: #4ADE80;
+  --success-color-dark: #16A34A;
+  
+  --warning-color: #F59E0B;
+  --warning-color-light: #FBBF24;
+  --warning-color-dark: #D97706;
+  
+  --error-color: #EF4444;
+  --error-color-light: #F87171;
+  --error-color-dark: #DC2626;
+  
+  --info-color: #3B82F6;
+  --info-color-light: #60A5FA;
+  --info-color-dark: #2563EB;
+  
+  /* Spacing scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  --spacing-3xl: 4rem;
+  
+  /* Border radius */
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 12px;
+  --border-radius-full: 9999px;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+  --transition-slow: 350ms ease;
+  
+  /* Z-index layers */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal-backdrop: 400;
+  --z-modal: 500;
+  --z-popover: 600;
+  --z-tooltip: 700;
+  --z-toast: 800;
+  
+  /* Layout */
+  --header-height: 64px;
+  --sidebar-width: 280px;
+  --sidebar-collapsed-width: 72px;
+  --content-max-width: 1400px;
+}
+
+/* Light theme (default) */
+:root,
+[data-theme='light'] {
+  /* Background colors */
+  --background-color: #ffffff;
+  --background-color-secondary: #f8f9fa;
+  --surface-color: #ffffff;
+  --surface-color-hover: #f8f9fa;
+  --surface-color-active: #f1f3f5;
+  
+  /* Text colors */
+  --text-color: #212529;
+  --text-color-secondary: #6c757d;
+  --text-color-muted: #adb5bd;
+  --text-color-inverse: #ffffff;
+  
+  /* Border colors */
+  --border-color: #dee2e6;
+  --border-color-light: #e9ecef;
+  --border-color-dark: #ced4da;
+  
+  /* Interactive states */
+  --hover-overlay: rgba(0, 0, 0, 0.04);
+  --active-overlay: rgba(0, 0, 0, 0.08);
+  --focus-ring-color: rgba(0, 91, 138, 0.25);
+  
+  /* Scrollbar */
+  --scrollbar-track: #f1f3f5;
+  --scrollbar-thumb: #ced4da;
+  --scrollbar-thumb-hover: #adb5bd;
+}
+
+/* Dark theme */
+[data-theme='dark'] {
+  /* Background colors */
+  --background-color: #1a1a2e;
+  --background-color-secondary: #16213e;
+  --surface-color: #16213e;
+  --surface-color-hover: #1f2b4a;
+  --surface-color-active: #283654;
+  
+  /* Text colors */
+  --text-color: #eaeaea;
+  --text-color-secondary: #a0a0a0;
+  --text-color-muted: #6c6c6c;
+  --text-color-inverse: #1a1a2e;
+  
+  /* Border colors */
+  --border-color: #2d2d44;
+  --border-color-light: #3d3d5c;
+  --border-color-dark: #1d1d2e;
+  
+  /* Interactive states */
+  --hover-overlay: rgba(255, 255, 255, 0.04);
+  --active-overlay: rgba(255, 255, 255, 0.08);
+  --focus-ring-color: rgba(0, 119, 182, 0.4);
+  
+  /* Shadows (more pronounced in dark mode) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  
+  /* Scrollbar */
+  --scrollbar-track: #1f2b4a;
+  --scrollbar-thumb: #3d3d5c;
+  --scrollbar-thumb-hover: #4d4d6c;
+}
+
+/* Utility classes for theming */
+.bg-primary { background-color: var(--primary-color); }
+.bg-primary-light { background-color: var(--primary-color-light); }
+.bg-primary-dark { background-color: var(--primary-color-dark); }
+.bg-surface { background-color: var(--surface-color); }
+.bg-background { background-color: var(--background-color); }
+
+.text-primary { color: var(--primary-color); }
+.text-primary-light { color: var(--primary-color-light); }
+.text-secondary { color: var(--text-color-secondary); }
+.text-muted { color: var(--text-color-muted); }
+
+.border-primary { border-color: var(--primary-color); }
+.border-default { border-color: var(--border-color); }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--border-radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--border-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Focus ring utility */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Smooth transitions for theme changes */
+body,
+.surface-ground,
+.surface-card,
+.surface-section,
+.surface-overlay,
+.surface-border {
+  transition: 
+    background-color var(--transition-normal),
+    border-color var(--transition-normal),
+    color var(--transition-normal);
+}

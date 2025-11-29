@@ -1,0 +1,34 @@
+/**
+ * Light theme specific overrides
+ */
+
+[data-theme='light'] {
+  /* PrimeReact component overrides */
+  --surface-ground: #f8f9fa;
+  --surface-section: #ffffff;
+  --surface-card: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-border: #dee2e6;
+  --surface-hover: rgba(0, 0, 0, 0.04);
+  
+  /* Text shades */
+  --text-color: #212529;
+  --text-color-secondary: #6c757d;
+  
+  /* Focus state */
+  --focus-ring: 0 0 0 0.2rem var(--focus-ring-color);
+}
+
+/* Light mode specific component styles */
+[data-theme='light'] .p-card {
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme='light'] .p-datatable .p-datatable-thead > tr > th {
+  background-color: var(--surface-ground);
+}
+
+[data-theme='light'] .p-menubar {
+  background-color: var(--surface-card);
+  border-bottom: 1px solid var(--surface-border);
+}

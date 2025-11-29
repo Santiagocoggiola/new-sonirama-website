@@ -14,3 +14,25 @@ body {
 .p-input-icon-left > i {
 	left: 0.9rem; /* nudge icon slightly to avoid touching the border */
 }
+
+/* Ensure PrimeReact popup menus and overlays appear above everything */
+.p-menu-overlay,
+.p-menu.p-menu-overlay,
+.p-overlaypanel,
+.p-dialog,
+.p-sidebar {
+	z-index: 1100 !important;
+}
+
+/* Sidebar mask should also be high z-index */
+.p-sidebar-mask {
+	z-index: 1099 !important;
+}
+
+/* Style popup menus to be more distinct */
+.p-menu.p-menu-overlay {
+	border: 1px solid var(--surface-border);
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+	border-radius: 8px;
+	overflow: hidden;
+}

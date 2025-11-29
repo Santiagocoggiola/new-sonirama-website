@@ -1,0 +1,88 @@
+/**
+ * Dark theme specific overrides
+ */
+
+[data-theme='dark'] {
+  /* PrimeReact component overrides */
+  --surface-ground: #1a1a2e;
+  --surface-section: #16213e;
+  --surface-card: #16213e;
+  --surface-overlay: #1f2b4a;
+  --surface-border: #2d2d44;
+  --surface-hover: rgba(255, 255, 255, 0.04);
+  
+  /* Text shades */
+  --text-color: #eaeaea;
+  --text-color-secondary: #a0a0a0;
+  
+  /* Focus state */
+  --focus-ring: 0 0 0 0.2rem var(--focus-ring-color);
+}
+
+/* Dark mode specific component styles */
+[data-theme='dark'] .p-card {
+  background-color: var(--surface-card);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme='dark'] .p-inputtext,
+[data-theme='dark'] .p-dropdown,
+[data-theme='dark'] .p-multiselect,
+[data-theme='dark'] .p-inputtextarea,
+[data-theme='dark'] .p-calendar .p-inputtext {
+  background-color: var(--surface-overlay);
+  border-color: var(--surface-border);
+  color: var(--text-color);
+}
+
+[data-theme='dark'] .p-inputtext:enabled:focus,
+[data-theme='dark'] .p-dropdown:not(.p-disabled).p-focus,
+[data-theme='dark'] .p-multiselect:not(.p-disabled).p-focus {
+  border-color: var(--primary-color);
+  box-shadow: var(--focus-ring);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-thead > tr > th {
+  background-color: var(--surface-ground);
+  border-color: var(--surface-border);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr {
+  background-color: var(--surface-card);
+}
+
+[data-theme='dark'] .p-datatable .p-datatable-tbody > tr:nth-child(even) {
+  background-color: var(--surface-overlay);
+}
+
+[data-theme='dark'] .p-menubar {
+  background-color: var(--surface-card);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+[data-theme='dark'] .p-sidebar {
+  background-color: var(--surface-card);
+}
+
+[data-theme='dark'] .p-dialog {
+  background-color: var(--surface-card);
+}
+
+[data-theme='dark'] .p-dialog .p-dialog-header {
+  background-color: var(--surface-card);
+  border-bottom: 1px solid var(--surface-border);
+}
+
+[data-theme='dark'] .p-dialog .p-dialog-footer {
+  background-color: var(--surface-card);
+  border-top: 1px solid var(--surface-border);
+}
+
+[data-theme='dark'] .p-menu {
+  background-color: var(--surface-overlay);
+}
+
+[data-theme='dark'] .p-toast .p-toast-message {
+  background-color: var(--surface-overlay);
+  border-color: var(--surface-border);
+}

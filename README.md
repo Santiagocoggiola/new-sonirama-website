@@ -102,9 +102,10 @@ dotnet ef database update --project src/Sonirama.Api --startup-project src/Sonir
 5. [Categories (`/api/categories`)](#categories-apicategories)
 6. [Cart (`/api/cart`)](#cart-apicart)
 7. [Orders (`/api/orders`)](#orders-apiorders)
-8. [Notifications REST (`/api/notifications`)](#notifications-rest-apinotifications)
-9. [Health Check (`/health`)](#health-check-health)
-10. [Notifications SignalR (`/hubs/orders`)](#notifications-signalr-hubsorders)
+8. [Contact (`/api/contact`)](#contact-apicontact)
+9. [Notifications REST (`/api/notifications`)](#notifications-rest-apinotifications)
+10. [Health Check (`/health`)](#health-check-health)
+11. [Notifications SignalR (`/hubs/orders`)](#notifications-signalr-hubsorders)
 
 ---
 
@@ -600,6 +601,64 @@ Respuesta 200: `PagedResult<OrderSummaryDto>`.
 - `POST /api/orders/{id}/reject-modifications` → `{ "reason": "Motivo obligatorio" }` (Usuario rechaza modificaciones, orden se cancela).
 
 Cada acción devuelve `OrderDto` actualizado y dispara notificaciones en tiempo real.
+
+---
+
+## Contact (`/api/contact`)
+
+Endpoint público para enviar mensajes de contacto. Rate limited: 3 mensajes por minuto por IP.
+
+| Método | Ruta | Auth | Descripción |
+| ------ | ---- | ---- | ----------- |
+| POST | `/api/contact` | Público | Envía un mensaje de contacto. |
+
+### POST `/api/contact`
+
+- **Body (`application/json`)**
+
+| Campo | Tipo | Requerido | Descripción |
+| --- | --- | --- | --- |
+| `name` | `string` | ✔︎ | Nombre del remitente (máx 100 chars). |
+| `email` | `string` | ✔︎ | Email de contacto (válido, máx 255 chars). |
+| `subject` | `string` | ✖︎ | Asunto del mensaje (máx 200 chars). |
+| `message` | `string` | ✔︎ | Contenido del mensaje (10-5000 chars). |
+
+**Ejemplo de request:**
+```json
+{
+    "name": "Juan Pérez",
+    "email": "juan@example.com",
+    "subject": "Consulta sobre productos",
+    "message": "Hola, quisiera saber si tienen stock del producto X..."
+}
+```
+
+**Response 200 (éxito):**
+```json
+{
+    "success": true,
+    "message": "Tu mensaje fue enviado correctamente. Te responderemos a la brevedad."
+}
+```
+
+**Response 400 (error de validación o envío):**
+```json
+{
+    "success": false,
+    "message": "El sistema de contacto no está disponible en este momento."
+}
+```
+
+### Configuración
+
+Variables de entorno para configurar el sistema de contacto:
+
+| Variable | Descripción | Default |
+| --- | --- | --- |
+| `Contact__DestinationEmail` | Email donde se reciben los mensajes | (requerido) |
+| `Contact__DestinationName` | Nombre del destinatario | `Sonirama Contacto` |
+| `Contact__SubjectPrefix` | Prefijo para el asunto | `[Contacto Web]` |
+| `Contact__Enabled` | Habilitar/deshabilitar | `true` |
 
 ---
 
