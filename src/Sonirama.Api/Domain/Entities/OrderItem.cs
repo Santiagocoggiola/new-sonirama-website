@@ -9,6 +9,10 @@ public sealed class OrderItem
     public string ProductCode { get; set; } = default!;
     public string ProductName { get; set; } = default!;
     public int Quantity { get; set; }
+    
+    /// <summary>Original quantity before admin modification (null if not modified)</summary>
+    public int? OriginalQuantity { get; set; }
+    
     public decimal UnitPrice { get; set; }
     public decimal DiscountPercent { get; set; }
     public decimal UnitPriceWithDiscount { get; set; }

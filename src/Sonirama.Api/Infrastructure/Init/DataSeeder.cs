@@ -25,6 +25,8 @@ public sealed class DataSeeder(
         {
             Email = opts.Email,
             Role = Role.IsValid(opts.Role) ? opts.Role : Role.Admin,
+            FirstName = opts.FirstName,
+            LastName = opts.LastName,
             IsActive = true
         };
         admin.PasswordHash = passwordHasher.HashPassword(admin, opts.Password);

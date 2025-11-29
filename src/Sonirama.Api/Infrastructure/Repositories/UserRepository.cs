@@ -84,5 +84,10 @@ public sealed class UserRepository(AppDbContext db) : IUserRepository
         db.Users.Update(user);
         await db.SaveChangesAsync(ct);
     }
+
+    public async Task<IReadOnlyList<User>> GetAdminUsersAsync(CancellationToken ct)
+        => await db.Users
+            .Where(u => u.Role == Domain.Enums.Role.Admin && u.IsActive)
+            .ToListAsync(ct);
 }
 

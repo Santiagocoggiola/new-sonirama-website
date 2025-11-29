@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Sonirama.Api.Application.Users;
 using Sonirama.Api.Application.Users.Dtos;
 
@@ -53,6 +54,7 @@ public sealed class UsersController(IUserService service) : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("password-reset/start")] // start anonymous flow
+    [EnableRateLimiting("password-reset")]
     public async Task<ActionResult> StartReset([FromQuery] string email, CancellationToken ct)
     {
         await service.StartPasswordResetAsync(email, ct);
@@ -61,6 +63,7 @@ public sealed class UsersController(IUserService service) : ControllerBase
 
     [AllowAnonymous]
     [HttpPost("password-reset/confirm")] // confirm anonymous flow
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult> ConfirmReset([FromQuery] string email, [FromQuery] string code, CancellationToken ct)
     {
         await service.ConfirmPasswordResetAsync(email, code, ct);

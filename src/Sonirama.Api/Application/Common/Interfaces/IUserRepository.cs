@@ -13,5 +13,6 @@ public interface IUserRepository
     Task<bool> ExistsAsync(string email, CancellationToken ct);
     Task<PagedResult<User>> ListAsync(UserListFilter filter, CancellationToken ct);
     Task DeleteAsync(User user, CancellationToken ct); // soft delete via IsActive=false
+    Task<IReadOnlyList<User>> GetAdminUsersAsync(CancellationToken ct);
 }
 

@@ -14,4 +14,9 @@ public interface IOrderService
     Task<OrderDto> RejectAsync(Guid orderId, Guid adminUserId, OrderRejectRequest request, CancellationToken ct);
     Task<OrderDto> MarkReadyAsync(Guid orderId, Guid adminUserId, OrderReadyRequest? request, CancellationToken ct);
     Task<OrderDto> CompleteAsync(Guid orderId, Guid adminUserId, OrderCompleteRequest? request, CancellationToken ct);
+    
+    // Order modification methods
+    Task<OrderDto> ModifyAsync(Guid orderId, Guid adminUserId, OrderModifyRequest request, CancellationToken ct);
+    Task<OrderDto> AcceptModificationsAsync(Guid orderId, Guid userId, OrderAcceptModificationsRequest? request, CancellationToken ct);
+    Task<OrderDto> RejectModificationsAsync(Guid orderId, Guid userId, OrderRejectModificationsRequest request, CancellationToken ct);
 }

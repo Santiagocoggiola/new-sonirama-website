@@ -7,6 +7,7 @@ public sealed class OrderDto
     public Guid Id { get; set; }
     public string Number { get; set; } = default!;
     public OrderStatus Status { get; set; }
+    public string StatusName => Status.ToString();
     public Guid UserId { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountTotal { get; set; }
@@ -16,6 +17,19 @@ public sealed class OrderDto
     public string? AdminNotes { get; set; }
     public string? RejectionReason { get; set; }
     public string? CancellationReason { get; set; }
+    
+    /// <summary>Reason for modification by admin</summary>
+    public string? ModificationReason { get; set; }
+    
+    /// <summary>Original total before modification</summary>
+    public decimal? OriginalTotal { get; set; }
+    
+    /// <summary>When the order was modified</summary>
+    public DateTime? ModifiedAtUtc { get; set; }
+    
+    /// <summary>Whether this order has pending modifications to review</summary>
+    public bool HasPendingModifications => Status == OrderStatus.ModificationPending;
+    
     public DateTime CreatedAtUtc { get; set; }
     public DateTime UpdatedAtUtc { get; set; }
     public DateTime? ApprovedAtUtc { get; set; }

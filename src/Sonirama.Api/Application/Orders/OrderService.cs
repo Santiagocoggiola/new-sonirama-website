@@ -219,6 +219,134 @@ public sealed class OrderService(ICartRepository cartRepository,
         return dto;
     }
 
+    public async Task<OrderDto> ModifyAsync(Guid orderId, Guid adminUserId, OrderModifyRequest request, CancellationToken ct)
+    {
+        if (request is null)
+        {
+            throw new ValidationException("La solicitud de modificación es obligatoria.");
+        }
+        if (request.Items is null || request.Items.Count == 0)
+        {
+            throw new ValidationException("Debés indicar al menos un item a modificar.");
+        }
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new ValidationException("Debés indicar el motivo de la modificación.");
+        }
+
+        var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
+        EnsureAdmin(adminUserId);
+        
+        if (order.Status is not OrderStatus.PendingApproval)
+        {
+            throw new ValidationException("Solo se pueden modificar pedidos pendientes de aprobación.");
+        }
+
+        // Store original total before modifications
+        order.OriginalTotal = order.Total;
+
+        // Apply modifications to items
+        foreach (var modification in request.Items)
+        {
+            var item = order.Items.FirstOrDefault(i => i.ProductId == modification.ProductId);
+            if (item is null)
+            {
+                throw new ValidationException($"El producto con ID {modification.ProductId} no existe en el pedido.");
+            }
+
+            if (modification.NewQuantity < 0)
+            {
+                throw new ValidationException("La cantidad no puede ser negativa.");
+            }
+
+            // Store original quantity if not already stored
+            item.OriginalQuantity ??= item.Quantity;
+            
+            // Update quantity and recalculate line total
+            item.Quantity = modification.NewQuantity;
+            item.LineTotal = item.UnitPriceWithDiscount * modification.NewQuantity;
+        }
+
+        // Remove items with 0 quantity
+        var itemsToRemove = order.Items.Where(i => i.Quantity == 0).ToList();
+        foreach (var item in itemsToRemove)
+        {
+            order.Items.Remove(item);
+        }
+
+        if (order.Items.Count == 0)
+        {
+            throw new ValidationException("No se puede dejar el pedido sin items. Usá rechazar en su lugar.");
+        }
+
+        // Recalculate totals
+        order.Subtotal = order.Items.Sum(i => i.UnitPrice * i.Quantity);
+        order.Total = order.Items.Sum(i => i.LineTotal);
+        order.DiscountTotal = order.Subtotal - order.Total;
+
+        // Set modification metadata
+        order.Status = OrderStatus.ModificationPending;
+        order.ModificationReason = request.Reason.Trim();
+        order.ModifiedByUserId = adminUserId;
+        order.ModifiedAtUtc = DateTime.UtcNow;
+        order.AdminNotes = string.IsNullOrWhiteSpace(request.AdminNotes) ? order.AdminNotes : request.AdminNotes.Trim();
+        order.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _orderRepository.UpdateAsync(order, ct);
+        var dto = MapOrder(order);
+        await _notifications.NotifyUpdatedAsync(dto, ct);
+        return dto;
+    }
+
+    public async Task<OrderDto> AcceptModificationsAsync(Guid orderId, Guid userId, OrderAcceptModificationsRequest? request, CancellationToken ct)
+    {
+        request ??= new OrderAcceptModificationsRequest();
+        var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
+        EnsureAccess(order, userId, false);
+        EnsureStatus(order, OrderStatus.ModificationPending, "Este pedido no tiene modificaciones pendientes de aceptar.");
+
+        // User accepts modifications, move to Approved status
+        order.Status = OrderStatus.Approved;
+        order.ApprovedAtUtc = DateTime.UtcNow;
+        order.UserNotes = string.IsNullOrWhiteSpace(request.Note) ? order.UserNotes : request.Note.Trim();
+        order.UpdatedAtUtc = DateTime.UtcNow;
+
+        // Clear original quantities as modifications are accepted
+        foreach (var item in order.Items)
+        {
+            item.OriginalQuantity = null;
+        }
+        order.OriginalTotal = null;
+
+        await _orderRepository.UpdateAsync(order, ct);
+        var dto = MapOrder(order);
+        await _notifications.NotifyUpdatedAsync(dto, ct);
+        return dto;
+    }
+
+    public async Task<OrderDto> RejectModificationsAsync(Guid orderId, Guid userId, OrderRejectModificationsRequest request, CancellationToken ct)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new ValidationException("Debés indicar el motivo del rechazo de las modificaciones.");
+        }
+
+        var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
+        EnsureAccess(order, userId, false);
+        EnsureStatus(order, OrderStatus.ModificationPending, "Este pedido no tiene modificaciones pendientes.");
+
+        // User rejects modifications, cancel the order
+        order.Status = OrderStatus.Cancelled;
+        order.CancelledAtUtc = DateTime.UtcNow;
+        order.CancellationReason = $"Usuario rechazó modificaciones: {request.Reason.Trim()}";
+        order.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _orderRepository.UpdateAsync(order, ct);
+        var dto = MapOrder(order);
+        await _notifications.NotifyUpdatedAsync(dto, ct);
+        return dto;
+    }
+
     private static OrderItem MapCartItemToOrderItem(Domain.Entities.CartItem item)
     {
         var product = item.Product ?? throw new InvalidOperationException("El item del carrito no tiene producto");
@@ -289,11 +417,14 @@ public sealed class OrderService(ICartRepository cartRepository,
             Subtotal = order.Subtotal,
             DiscountTotal = order.DiscountTotal,
             Total = order.Total,
+            OriginalTotal = order.OriginalTotal,
             Currency = order.Currency,
             UserNotes = order.UserNotes,
             AdminNotes = order.AdminNotes,
             RejectionReason = order.RejectionReason,
             CancellationReason = order.CancellationReason,
+            ModificationReason = order.ModificationReason,
+            ModifiedAtUtc = order.ModifiedAtUtc,
             CreatedAtUtc = order.CreatedAtUtc,
             UpdatedAtUtc = order.UpdatedAtUtc,
             ApprovedAtUtc = order.ApprovedAtUtc,
@@ -308,6 +439,7 @@ public sealed class OrderService(ICartRepository cartRepository,
                 ProductCode = i.ProductCode,
                 ProductName = i.ProductName,
                 Quantity = i.Quantity,
+                OriginalQuantity = i.OriginalQuantity,
                 UnitPrice = i.UnitPrice,
                 DiscountPercent = i.DiscountPercent,
                 UnitPriceWithDiscount = i.UnitPriceWithDiscount,

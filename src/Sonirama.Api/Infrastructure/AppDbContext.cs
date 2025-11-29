@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Notification> Notifications => Set<Notification>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -36,6 +37,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     modelBuilder.ApplyConfiguration(new ProductImageConfiguration());
     modelBuilder.ApplyConfiguration(new OrderConfiguration());
     modelBuilder.ApplyConfiguration(new OrderItemConfiguration());
+    modelBuilder.ApplyConfiguration(new NotificationConfiguration());
 
         modelBuilder.Entity<RefreshToken>(b =>
         {

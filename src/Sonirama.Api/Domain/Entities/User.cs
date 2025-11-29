@@ -18,5 +18,19 @@ public class User
     public string LastName { get; set; } = default!;
     public string? PhoneNumber { get; set; }
 
+    // Lockout fields
+    public int FailedLoginAttempts { get; set; } = 0;
+    public DateTime? LockoutEndUtc { get; set; }
+
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
+
+    /// <summary>
+    /// Checks if the user is currently locked out.
+    /// </summary>
+    public bool IsLockedOut => LockoutEndUtc.HasValue && LockoutEndUtc > DateTime.UtcNow;
+
+    /// <summary>
+    /// Gets remaining lockout time, or null if not locked out.
+    /// </summary>
+    public TimeSpan? RemainingLockoutTime => IsLockedOut ? LockoutEndUtc - DateTime.UtcNow : null;
 }

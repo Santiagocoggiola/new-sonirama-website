@@ -17,6 +17,19 @@ public sealed class Order
     public string? AdminNotes { get; set; }
     public string? RejectionReason { get; set; }
     public string? CancellationReason { get; set; }
+    
+    /// <summary>Reason for modification by admin</summary>
+    public string? ModificationReason { get; set; }
+    
+    /// <summary>Admin who modified the order</summary>
+    public Guid? ModifiedByUserId { get; set; }
+    
+    /// <summary>When the order was modified by admin</summary>
+    public DateTime? ModifiedAtUtc { get; set; }
+    
+    /// <summary>Original total before modification (for comparison)</summary>
+    public decimal? OriginalTotal { get; set; }
+    
     public Guid? ApprovedByUserId { get; set; }
     public Guid? RejectedByUserId { get; set; }
     public Guid? ReadyByUserId { get; set; }

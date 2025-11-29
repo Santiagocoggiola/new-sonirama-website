@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Sonirama.Api.Application.Auth;
 using Sonirama.Api.Application.Auth.Dtos;
 using Sonirama.Api.Application.Common.Exceptions;
@@ -12,6 +13,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 {
     [AllowAnonymous]
     [HttpPost("login")]
+    [EnableRateLimiting("auth")]
     public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest request, CancellationToken ct)
     {
         var resp = await authService.LoginAsync(request.Email, request.Password, ct);

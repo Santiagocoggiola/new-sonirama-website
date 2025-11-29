@@ -4,6 +4,35 @@ This document describe todas las rutas disponibles en la Web API (.NET 9) para q
 
 > **Nota**: La aplicación también contiene un frontend (`/webapp`), pero este README está enfocado exclusivamente en la API (`src/Sonirama.Api`).
 
+## Requisitos previos
+
+| Requisito | Versión | Descripción |
+| --- | --- | --- |
+| .NET SDK | 9.0+ | [Descargar](https://dotnet.microsoft.com/download) |
+| Node.js | 20+ | Solo para el frontend (`/webapp`) |
+| Docker | Latest | Para PostgreSQL via `docker-compose` |
+| PostgreSQL | 15+ | Se levanta con Docker o instalar manualmente |
+
+### Inicio rápido
+
+```powershell
+# 1. Levantar base de datos
+docker compose up -d
+
+# 2. Restaurar dependencias y aplicar migraciones
+cd src/Sonirama.Api
+dotnet restore
+dotnet ef database update
+
+# 3. Ejecutar API
+dotnet run
+
+# 4. (Opcional) Frontend
+cd webapp
+npm install
+npm run dev
+```
+
 ## Base URL y autenticación
 
 - Base URL recomendada en desarrollo: `https://localhost:5001` (ver consola al ejecutar `dotnet run`).
@@ -73,7 +102,9 @@ dotnet ef database update --project src/Sonirama.Api --startup-project src/Sonir
 5. [Categories (`/api/categories`)](#categories-apicategories)
 6. [Cart (`/api/cart`)](#cart-apicart)
 7. [Orders (`/api/orders`)](#orders-apiorders)
-8. [Notifications (SignalR `/hubs/orders`)](#notifications-signalr-hubsorders)
+8. [Notifications REST (`/api/notifications`)](#notifications-rest-apinotifications)
+9. [Health Check (`/health`)](#health-check-health)
+10. [Notifications SignalR (`/hubs/orders`)](#notifications-signalr-hubsorders)
 
 ---
 
@@ -126,6 +157,28 @@ Respuesta 200: mismo `AuthResponse` que en login.
 - **Auth**: Bearer obligatorio (usa el `sub` o `nameidentifier` del JWT).
 - **Body**: vacío.
 - **Response 200**: `{ "mensaje": "Sesiones revocadas", "cantidad": <int> }`.
+
+### Sistema de Lockout (protección contra fuerza bruta)
+
+El sistema bloquea temporalmente las cuentas después de múltiples intentos fallidos de login:
+
+| Configuración | Valor |
+| --- | --- |
+| Intentos permitidos | 5 |
+| Duración del bloqueo | 15 minutos |
+
+**Comportamiento:**
+- Cada intento fallido incrementa `FailedLoginAttempts`.
+- Al alcanzar 5 intentos, se bloquea la cuenta por 15 minutos.
+- Un login exitoso resetea el contador.
+- Durante el lockout, el login retorna error 401 con mensaje descriptivo.
+
+**Response 401 durante lockout:**
+```json
+{
+    "error": "Cuenta bloqueada temporalmente. Intentá de nuevo en 14 minutos."
+}
+```
 
 ---
 
@@ -446,8 +499,9 @@ Los pedidos representan la confirmación del carrito. Siguen el siguiente ciclo 
 | Estado | Quién lo dispara | Descripción |
 | --- | --- | --- |
 | `PendingApproval` | Checkout | Pedido recién creado, pendiente de revisión del staff.
-| `Approved` | Admin | Aprobado y a la espera de que el usuario confirme.
+| `Approved` | Admin / Usuario | Aprobado y a la espera de que el usuario confirme.
 | `Rejected` | Admin | Rechazado con motivo.
+| `ModificationPending` | Admin | Admin modificó cantidades, espera aceptación del usuario.
 | `Confirmed` | Usuario | El cliente confirma que avanzará.
 | `ReadyForPickup` | Admin | Pedido preparado/listo para retiro o envío.
 | `Completed` | Admin | Pedido entregado/completado.
@@ -469,6 +523,9 @@ Los pedidos representan la confirmación del carrito. Siguen el siguiente ciclo 
         "adminNotes": "Listo para retiro",
         "rejectionReason": null,
         "cancellationReason": null,
+        "modificationReason": null,
+        "originalTotal": null,
+        "modifiedAtUtc": null,
         "createdAtUtc": "2025-11-21T12:30:00Z",
         "updatedAtUtc": "2025-11-21T13:00:00Z",
         "approvedAtUtc": "2025-11-21T12:45:00Z",
@@ -538,12 +595,118 @@ Respuesta 200: `PagedResult<OrderSummaryDto>`.
 - `POST /api/orders/{id}/reject` → `{ "reason": "Motivo" }`.
 - `POST /api/orders/{id}/ready` → `{ "readyNotes": "Texto opcional" }` (estado previo `Confirmed`).
 - `POST /api/orders/{id}/complete` → `{ "completionNotes": "Texto opcional" }` (estado previo `ReadyForPickup`).
+- `POST /api/orders/{id}/modify` → `{ "reason": "Motivo", "items": [...], "adminNotes": "Opcional" }` (Admin modifica cantidades, estado cambia a `ModificationPending`).
+- `POST /api/orders/{id}/accept-modifications` → `{ "note": "Opcional" }` (Usuario acepta modificaciones, estado cambia a `Approved`).
+- `POST /api/orders/{id}/reject-modifications` → `{ "reason": "Motivo obligatorio" }` (Usuario rechaza modificaciones, orden se cancela).
 
 Cada acción devuelve `OrderDto` actualizado y dispara notificaciones en tiempo real.
 
 ---
 
-## Notifications (SignalR `/hubs/orders`)
+## Notifications REST (`/api/notifications`)
+
+API REST para gestionar notificaciones del usuario autenticado.
+
+| Método | Ruta | Auth | Descripción |
+| ------ | ---- | ---- | ----------- |
+| GET | `/api/notifications` | `Bearer` | Lista paginada de notificaciones del usuario. |
+| GET | `/api/notifications/unread-count` | `Bearer` | Contador de notificaciones sin leer. |
+| POST | `/api/notifications/{id}/read` | `Bearer` | Marcar una notificación como leída. |
+| POST | `/api/notifications/read-all` | `Bearer` | Marcar todas las notificaciones como leídas. |
+| DELETE | `/api/notifications/{id}` | `Bearer` | Eliminar una notificación. |
+
+### `NotificationDto`
+
+```json
+{
+    "id": "guid",
+    "type": 2,
+    "typeName": "OrderApproved",
+    "title": "Pedido aprobado",
+    "body": "Tu pedido SO-20251121094501001 fue aprobado",
+    "referenceId": "order-guid",
+    "isRead": false,
+    "createdAtUtc": "2025-11-21T12:45:00Z",
+    "readAtUtc": null
+}
+```
+
+#### Tipos de notificación (`NotificationType`)
+
+| Valor | Nombre | Descripción |
+| --- | --- | --- |
+| 0 | `OrderCreated` | Nuevo pedido creado |
+| 1 | `OrderStatusChanged` | Estado del pedido cambió |
+| 2 | `OrderApproved` | Pedido aprobado por admin |
+| 3 | `OrderRejected` | Pedido rechazado por admin |
+| 4 | `OrderReady` | Pedido listo para retiro |
+| 5 | `OrderCompleted` | Pedido completado |
+| 6 | `OrderCancelled` | Pedido cancelado |
+| 7 | `PriceChanged` | Precio de producto cambió |
+| 8 | `NewProduct` | Nuevo producto disponible |
+| 9 | `PasswordReset` | Contraseña reseteada |
+| 10 | `AccountCreated` | Cuenta creada |
+| 99 | `System` | Notificación del sistema |
+
+### GET `/api/notifications`
+
+- **Query params**
+
+| Campo | Tipo | Default | Descripción |
+| --- | --- | --- | --- |
+| `page` | `int` | 1 | Página actual. |
+| `pageSize` | `int` | 20 | Items por página (máx 100). |
+| `isRead` | `bool?` | null | Filtrar por estado (null = todas). |
+
+- **Response 200** → `PagedResult<NotificationDto>`
+
+### GET `/api/notifications/unread-count`
+
+- **Response 200**
+
+```json
+{ "count": 5 }
+```
+
+### POST `/api/notifications/{id}/read`
+
+- **Response 200** → `NotificationDto` (actualizado)
+- **Response 404** → Notificación no encontrada o no pertenece al usuario.
+
+### POST `/api/notifications/read-all`
+
+- **Response 200**
+
+```json
+{ "markedAsRead": 10 }
+```
+
+### DELETE `/api/notifications/{id}`
+
+- **Response 200** → `{ "deleted": true }`
+- **Response 404** → Notificación no encontrada.
+
+---
+
+## Health Check (`/health`)
+
+Endpoint público para verificar el estado de la aplicación y sus dependencias.
+
+- **Response 200**
+
+```json
+{
+  "status": "Healthy",
+  "checks": [
+    { "name": "postgres", "status": "Healthy", "duration": 15.5 }
+  ],
+  "totalDuration": 16.2
+}
+```
+
+---
+
+## Notifications SignalR (`/hubs/orders`)
 
 El backend expone un hub SignalR para avisos instantáneos de pedidos.
 
@@ -559,6 +722,8 @@ El backend expone un hub SignalR para avisos instantáneos de pedidos.
 | --- | --- | --- |
 | `OrderCreated` | `OrderDto` nuevo | Grupo `admins` + grupo del usuario dueño.
 | `OrderUpdated` | `OrderDto` actualizado | Grupo `admins` + grupo del usuario dueño.
+| `NewNotification` | `NotificationDto` | Usuario destinatario de la notificación.
+| `UnreadCountChanged` | `{ count: int }` | Usuario cuando su contador de notificaciones cambia.
 
 ### Suscripciones manuales
 

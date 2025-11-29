@@ -89,4 +89,41 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
         var dto = await orderService.CompleteAsync(id, adminId.Value, request ?? new OrderCompleteRequest(), ct);
         return Ok(dto);
     }
+
+    /// <summary>
+    /// Admin modifies a pending order (changes quantities). User must accept/reject the modifications.
+    /// </summary>
+    [HttpPost("{id:guid}/modify")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<ActionResult<OrderDto>> ModifyAsync(Guid id, [FromBody] OrderModifyRequest request, CancellationToken ct)
+    {
+        var adminId = User.GetUserId();
+        if (adminId is null) return Unauthorized();
+        var dto = await orderService.ModifyAsync(id, adminId.Value, request, ct);
+        return Ok(dto);
+    }
+
+    /// <summary>
+    /// User accepts the admin's modifications to their order.
+    /// </summary>
+    [HttpPost("{id:guid}/accept-modifications")]
+    public async Task<ActionResult<OrderDto>> AcceptModificationsAsync(Guid id, [FromBody] OrderAcceptModificationsRequest? request, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        if (userId is null) return Unauthorized();
+        var dto = await orderService.AcceptModificationsAsync(id, userId.Value, request ?? new OrderAcceptModificationsRequest(), ct);
+        return Ok(dto);
+    }
+
+    /// <summary>
+    /// User rejects the admin's modifications and cancels the order.
+    /// </summary>
+    [HttpPost("{id:guid}/reject-modifications")]
+    public async Task<ActionResult<OrderDto>> RejectModificationsAsync(Guid id, [FromBody] OrderRejectModificationsRequest request, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        if (userId is null) return Unauthorized();
+        var dto = await orderService.RejectModificationsAsync(id, userId.Value, request, ct);
+        return Ok(dto);
+    }
 }

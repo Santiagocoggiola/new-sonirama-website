@@ -17,15 +17,48 @@ public sealed class AuthService(
 {
     private readonly JwtOptions _jwtOptions = jwtOptions.Value;
 
+    private const int MaxFailedAttempts = 5;
+    private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
+
     public async Task<AuthResponse> LoginAsync(string email, string password, CancellationToken ct)
     {
         var user = await users.GetByEmailAsync(email, ct) ?? throw new UnauthorizedDomainException("Credenciales inválidas");
         if (!user.IsActive)
             throw new UnauthorizedDomainException("Usuario inactivo");
 
+        // Check if user is locked out
+        if (user.IsLockedOut)
+        {
+            var remainingMinutes = (int)Math.Ceiling(user.RemainingLockoutTime!.Value.TotalMinutes);
+            throw new UnauthorizedDomainException($"Cuenta bloqueada temporalmente. Intente nuevamente en {remainingMinutes} minuto(s).");
+        }
+
         var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, password);
         if (result == PasswordVerificationResult.Failed)
-            throw new UnauthorizedDomainException("Credenciales inválidas");
+        {
+            // Increment failed attempts
+            user.FailedLoginAttempts++;
+            
+            if (user.FailedLoginAttempts >= MaxFailedAttempts)
+            {
+                user.LockoutEndUtc = DateTime.UtcNow.Add(LockoutDuration);
+                user.FailedLoginAttempts = 0;
+                await users.UpdateAsync(user, ct);
+                throw new UnauthorizedDomainException($"Demasiados intentos fallidos. Cuenta bloqueada por {(int)LockoutDuration.TotalMinutes} minutos.");
+            }
+            
+            await users.UpdateAsync(user, ct);
+            var attemptsRemaining = MaxFailedAttempts - user.FailedLoginAttempts;
+            throw new UnauthorizedDomainException($"Credenciales inválidas. {attemptsRemaining} intento(s) restante(s).");
+        }
+
+        // Successful login - reset lockout counters
+        if (user.FailedLoginAttempts > 0 || user.LockoutEndUtc.HasValue)
+        {
+            user.FailedLoginAttempts = 0;
+            user.LockoutEndUtc = null;
+            await users.UpdateAsync(user, ct);
+        }
 
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
         {
