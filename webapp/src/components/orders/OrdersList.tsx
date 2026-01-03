@@ -40,7 +40,7 @@ export function OrdersList({ testId = 'orders-list' }: OrdersListProps) {
       className="font-medium"
       data-testid={`${testId}-order-${order.id}-number`}
     >
-      #{order.orderNumber}
+      #{order.orderNumber || order.number}
     </span>
   );
 

@@ -11,7 +11,9 @@ public sealed class ProductProfile : Profile
     {
         CreateMap<ProductImage, ProductImageDto>();
         CreateMap<Product, ProductDto>();
-        CreateMap<ProductCreateRequest, Product>();
-        CreateMap<ProductUpdateRequest, Product>();
+        CreateMap<ProductCreateRequest, Product>()
+            .ForMember(d => d.Images, opt => opt.Ignore());
+        CreateMap<ProductUpdateRequest, Product>()
+            .ForMember(d => d.Images, opt => opt.Ignore());
     }
 }

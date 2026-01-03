@@ -22,7 +22,7 @@ import {
   useMarkAllAsReadMutation,
   useDeleteNotificationMutation,
 } from '@/store/api/notificationsApi';
-import { selectIsAuthenticated } from '@/store/slices/authSlice';
+import { selectIsAuthenticated, selectIsAdmin } from '@/store/slices/authSlice';
 import { showToast } from '@/components/ui/toast-service';
 import {
   NotificationDto,
@@ -34,6 +34,7 @@ import {
 export function useNotifications(params?: NotificationListParams) {
   const dispatch = useAppDispatch();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isAdmin = useAppSelector(selectIsAdmin);
 
   // Selectors
   const notifications = useAppSelector(selectNotifications);
@@ -158,8 +159,13 @@ export function useNotifications(params?: NotificationListParams) {
    * Get link for notification navigation
    */
   const getLink = useCallback((notification: NotificationDto) => {
-    return getNotificationLink(notification);
-  }, []);
+    // Admins should navigate to admin detail; users to their orders
+    if (notification.referenceId) {
+      if (isAdmin) return `/admin/orders/${notification.referenceId}`;
+      return `/orders/${notification.referenceId}`;
+    }
+    return null;
+  }, [isAdmin]);
 
   return {
     // State

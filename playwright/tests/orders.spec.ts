@@ -24,6 +24,7 @@ test.describe('Complete Order Flow', () => {
   let testCategory: { id: string; name: string };
   let testProduct: { id: string; name: string; price: number };
   let orderId: string;
+  let orderNumber: string;
   
   const testRunId = `order_e2e_${Date.now()}`;
 
@@ -150,6 +151,11 @@ test.describe('Complete Order Flow', () => {
     orderId = await cartHelper.checkout();
     expect(orderId).toBeTruthy();
 
+    const numberElement = page.getByTestId('order-detail-number');
+    if (await numberElement.isVisible({ timeout: 2000 }).catch(() => false)) {
+      orderNumber = (await numberElement.textContent())?.trim() || '';
+    }
+
     // Verify on order detail page
     await expect(page.getByTestId('order-detail')).toBeVisible({ timeout: 15000 });
   });
@@ -175,7 +181,9 @@ test.describe('Complete Order Flow', () => {
     const orderHelper = new OrderHelper(page);
 
     await auth.loginAsAdmin();
-    await orderHelper.navigateToAdminOrders();
+    await orderHelper.clearAdminFilters();
+    await orderHelper.setAdminDateRange(new Date(Date.now() - 24 * 60 * 60 * 1000), new Date());
+    await orderHelper.searchAdminOrders(orderNumber || orderId);
 
     // Orders table should be visible
     await expect(page.getByTestId('admin-orders-table')).toBeVisible();

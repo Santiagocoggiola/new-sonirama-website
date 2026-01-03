@@ -10,12 +10,14 @@ namespace Sonirama.Api.Application.Orders;
 
 public sealed class OrderService(ICartRepository cartRepository,
                                  IOrderRepository orderRepository,
-                                 IOrderNotificationService notificationService) : IOrderService
+                                 IOrderNotificationService notificationService,
+                                 IProductRepository productRepository) : IOrderService
 {
     private const string OrderNotFoundMessage = "Pedido no encontrado";
     private readonly ICartRepository _cartRepository = cartRepository;
     private readonly IOrderRepository _orderRepository = orderRepository;
     private readonly IOrderNotificationService _notifications = notificationService;
+    private readonly IProductRepository _productRepository = productRepository;
 
     public async Task<OrderDto> CreateFromCartAsync(Guid userId, CancellationToken ct)
     {
@@ -59,7 +61,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         await _orderRepository.AddAsync(order, ct);
         await _cartRepository.ClearAsync(cart.Id, ct);
 
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyCreatedAsync(dto, ct);
         return dto;
     }
@@ -68,7 +70,7 @@ public sealed class OrderService(ICartRepository cartRepository,
     {
     var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
         EnsureAccess(order, requesterId, requesterIsAdmin);
-        return MapOrder(order);
+        return await MapOrderAsync(order, ct);
     }
 
     public async Task<PagedResult<OrderSummaryDto>> ListAsync(OrderListRequest request, Guid requesterId, bool requesterIsAdmin, CancellationToken ct)
@@ -111,7 +113,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -124,9 +126,13 @@ public sealed class OrderService(ICartRepository cartRepository,
         }
     var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
         EnsureAccess(order, userId, false);
-        if (order.Status is not OrderStatus.PendingApproval and not OrderStatus.Approved)
+        // Puede cancelar mientras no haya salido a preparación/entrega
+        if (order.Status is not OrderStatus.PendingApproval
+            and not OrderStatus.Approved
+            and not OrderStatus.ModificationPending
+            and not OrderStatus.Confirmed)
         {
-            throw new ValidationException("Solo podés cancelar pedidos pendientes o aprobados.");
+            throw new ValidationException("Solo podés cancelar pedidos que aún no están listos para retiro/entrega.");
         }
 
         order.Status = OrderStatus.Cancelled;
@@ -135,7 +141,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -154,7 +160,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -176,7 +182,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -186,7 +192,10 @@ public sealed class OrderService(ICartRepository cartRepository,
         request ??= new OrderReadyRequest();
     var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
         EnsureAdmin(adminUserId);
-        EnsureStatus(order, OrderStatus.Confirmed, "El pedido debe estar confirmado por el usuario antes de marcarlo listo.");
+        if (order.Status is not OrderStatus.Approved and not OrderStatus.Confirmed)
+        {
+            throw new ValidationException("Solo se pueden marcar como listos los pedidos aprobados o confirmados.");
+        }
 
         order.Status = OrderStatus.ReadyForPickup;
         order.ReadyAtUtc = DateTime.UtcNow;
@@ -195,7 +204,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -214,7 +223,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -293,7 +302,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -319,7 +328,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.OriginalTotal = null;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -342,7 +351,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
-        var dto = MapOrder(order);
+        var dto = await MapOrderAsync(order, ct);
         await _notifications.NotifyUpdatedAsync(dto, ct);
         return dto;
     }
@@ -406,8 +415,12 @@ public sealed class OrderService(ICartRepository cartRepository,
         }
     }
 
-    private static OrderDto MapOrder(Order order)
+    private record ProductImageInfo(string Url, string? AltText);
+
+    private async Task<OrderDto> MapOrderAsync(Order order, CancellationToken ct)
     {
+        var imageMap = await LoadPrimaryImagesAsync(order.Items.Select(i => i.ProductId), ct);
+
         return new OrderDto
         {
             Id = order.Id,
@@ -433,19 +446,46 @@ public sealed class OrderService(ICartRepository cartRepository,
             ReadyAtUtc = order.ReadyAtUtc,
             CompletedAtUtc = order.CompletedAtUtc,
             CancelledAtUtc = order.CancelledAtUtc,
-            Items = order.Items.Select(i => new OrderItemDto
+            Items = order.Items.Select(i =>
             {
-                ProductId = i.ProductId,
-                ProductCode = i.ProductCode,
-                ProductName = i.ProductName,
-                Quantity = i.Quantity,
-                OriginalQuantity = i.OriginalQuantity,
-                UnitPrice = i.UnitPrice,
-                DiscountPercent = i.DiscountPercent,
-                UnitPriceWithDiscount = i.UnitPriceWithDiscount,
-                LineTotal = i.LineTotal
+                imageMap.TryGetValue(i.ProductId, out var image);
+                return new OrderItemDto
+                {
+                    ProductId = i.ProductId,
+                    ProductCode = i.ProductCode,
+                    ProductName = i.ProductName,
+                    ProductImageUrl = image?.Url,
+                    ProductImageAlt = image?.AltText,
+                    Quantity = i.Quantity,
+                    OriginalQuantity = i.OriginalQuantity,
+                    UnitPrice = i.UnitPrice,
+                    DiscountPercent = i.DiscountPercent,
+                    UnitPriceWithDiscount = i.UnitPriceWithDiscount,
+                    Subtotal = i.UnitPrice * i.Quantity,
+                    LineTotal = i.LineTotal
+                };
             }).ToList()
         };
+    }
+
+    private async Task<Dictionary<Guid, ProductImageInfo>> LoadPrimaryImagesAsync(IEnumerable<Guid> productIds, CancellationToken ct)
+    {
+        var result = new Dictionary<Guid, ProductImageInfo>();
+        var uniqueIds = productIds.Distinct().ToList();
+
+        foreach (var productId in uniqueIds)
+        {
+            var product = await _productRepository.GetByIdAsync(productId, ct);
+            if (product is null || product.Images.Count == 0) continue;
+
+            var primary = product.Images
+                .OrderBy(i => i.UploadedAtUtc)
+                .First();
+
+            result[productId] = new ProductImageInfo(primary.Url, primary.FileName);
+        }
+
+        return result;
     }
 
     private static OrderSummaryDto MapSummary(Order order)

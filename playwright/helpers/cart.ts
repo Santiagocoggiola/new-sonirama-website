@@ -112,12 +112,23 @@ export class CartHelper {
       await clearBtn.click();
 
       // Confirm if dialog appears
-      const confirmBtn = this.page.getByRole('button', { name: /confirmar|sí|yes/i });
+      const confirmBtn = this.page.getByRole('button', { name: /aceptar|confirmar|sí|yes|ok|delete|eliminar/i });
       if (await confirmBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
         await confirmBtn.click();
       }
 
       await this.page.waitForTimeout(500);
+    }
+
+    // Fallback: if items remain, remove them one by one
+    const items = this.page.locator('[data-testid^="cart-item-"][data-testid$="-remove"]');
+    const count = await items.count();
+    for (let i = 0; i < count; i++) {
+      const btn = items.nth(i);
+      if (await btn.isVisible({ timeout: 500 }).catch(() => false)) {
+        await btn.click();
+        await this.page.waitForTimeout(200);
+      }
     }
   }
 
@@ -164,7 +175,12 @@ export class CartHelper {
     await this.navigateToCart();
     
     const emptyState = this.page.getByTestId('cart-view-empty');
-    return emptyState.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasEmptyState = await emptyState.isVisible({ timeout: 3000 }).catch(() => false);
+    if (hasEmptyState) return true;
+
+    const items = this.page.locator('[data-testid^="cart-item-"]');
+    const count = await items.count();
+    return count === 0;
   }
 
   /**

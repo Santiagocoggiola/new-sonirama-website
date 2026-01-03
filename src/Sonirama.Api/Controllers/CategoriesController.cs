@@ -24,7 +24,7 @@ public sealed class CategoriesController(ICategoryService service) : ControllerB
     public async Task<IActionResult> CreateAsync([FromBody] CategoryCreateRequest request, CancellationToken ct)
     {
         var created = await service.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+        return Created($"/api/categories/{created.Id}", created);
     }
 
     [HttpPut("{id:guid}")]

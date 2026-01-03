@@ -6,11 +6,13 @@ public sealed class OrderDto
 {
     public Guid Id { get; set; }
     public string Number { get; set; } = default!;
+    public string OrderNumber => Number;
     public OrderStatus Status { get; set; }
     public string StatusName => Status.ToString();
     public Guid UserId { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountTotal { get; set; }
+    public decimal BulkDiscountAmount => DiscountTotal;
     public decimal Total { get; set; }
     public string Currency { get; set; } = "ARS";
     public string? UserNotes { get; set; }

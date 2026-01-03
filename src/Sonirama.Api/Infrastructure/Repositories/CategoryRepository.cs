@@ -98,6 +98,26 @@ public sealed class CategoryRepository(AppDbContext db) : ICategoryRepository
         await db.SaveChangesAsync(ct);
     }
 
+    public async Task PurgeAsync(Category category, CancellationToken ct)
+    {
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
+        var relations = await db.CategoryRelations
+            .Where(r => r.ParentId == category.Id || r.ChildId == category.Id)
+            .ToListAsync(ct);
+
+        var productLinks = await db.ProductCategories
+            .Where(pc => pc.CategoryId == category.Id)
+            .ToListAsync(ct);
+
+        db.CategoryRelations.RemoveRange(relations);
+        db.ProductCategories.RemoveRange(productLinks);
+        db.Categories.Remove(category);
+
+        await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+    }
+
     public async Task<IReadOnlyList<Guid>> GetDescendantIdsAsync(Guid categoryId, CancellationToken ct)
     {
         // Simple BFS on relations

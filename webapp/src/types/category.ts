@@ -16,7 +16,6 @@ export interface CategoryDto {
 
 export interface CategoryCreateRequest {
   name: string;
-  slug: string;
   description?: string;
   isActive?: boolean;
   parentIds?: string[];
@@ -24,7 +23,6 @@ export interface CategoryCreateRequest {
 
 export interface CategoryUpdateRequest {
   name: string;
-  slug: string;
   description?: string;
   isActive?: boolean;
   parentIds?: string[];

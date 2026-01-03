@@ -8,10 +8,16 @@ import { Tag } from 'primereact/tag';
 import { Divider } from 'primereact/divider';
 import { Timeline } from 'primereact/timeline';
 import { Skeleton } from 'primereact/skeleton';
-import { useGetOrderQuery } from '@/store/api/ordersApi';
-import { formatPrice, formatDate, formatDateTime } from '@/lib/utils';
+import {
+  useGetOrderQuery,
+  useAcceptModificationsMutation,
+  useRejectModificationsMutation,
+  useCancelOrderMutation,
+} from '@/store/api/ordersApi';
+import { formatPrice, formatDate, formatDateTime, buildAssetUrl } from '@/lib/utils';
 import { getOrderStatusLabel, getOrderStatusSeverity } from '@/types/order';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { showToast } from '@/components/ui/toast-service';
 import type { OrderItemDto } from '@/types/order';
 
 interface OrderDetailProps {
@@ -31,6 +37,10 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
     isLoading,
     isError,
   } = useGetOrderQuery(orderId);
+
+  const [acceptMods, { isLoading: isAccepting }] = useAcceptModificationsMutation();
+  const [rejectMods, { isLoading: isRejecting }] = useRejectModificationsMutation();
+  const [cancelOrder, { isLoading: isCancelling }] = useCancelOrderMutation();
 
   const handleGoBack = () => {
     router.back();
@@ -213,8 +223,124 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
               </div>
             </div>
           </Card>
+
+          {/* User actions */}
+          <Card
+            id={`${testId}-actions`}
+            data-testid={`${testId}-actions`}
+            title="Acciones"
+            className="mt-4"
+          >
+            <OrderActions
+              orderId={order.id}
+              status={order.status}
+              testId={`${testId}-actions`}
+              onAcceptMods={async () => {
+                try {
+                  await acceptMods({ id: order.id }).unwrap();
+                  showToast({ severity: 'success', summary: 'Cambios aceptados' });
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo aceptar los cambios' });
+                }
+              }}
+              onRejectMods={async () => {
+                const reason = prompt('Motivo del rechazo de cambios:');
+                if (!reason) return;
+                try {
+                  await rejectMods({ id: order.id, body: { reason } }).unwrap();
+                  showToast({ severity: 'success', summary: 'Cambios rechazados' });
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo rechazar los cambios' });
+                }
+              }}
+              onCancel={async () => {
+                const reason = prompt('Motivo de cancelación:');
+                if (!reason) return;
+                try {
+                  await cancelOrder({ id: order.id, body: { reason } }).unwrap();
+                  showToast({ severity: 'success', summary: 'Pedido cancelado' });
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo cancelar el pedido' });
+                }
+              }}
+              isAccepting={isAccepting}
+              isRejecting={isRejecting}
+              isCancelling={isCancelling}
+            />
+          </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+function OrderActions({
+  orderId,
+  status,
+  onAcceptMods,
+  onRejectMods,
+  onCancel,
+  isAccepting,
+  isRejecting,
+  isCancelling,
+  testId,
+}: {
+  orderId: string;
+  status: string;
+  onAcceptMods: () => Promise<void>;
+  onRejectMods: () => Promise<void>;
+  onCancel: () => Promise<void>;
+  isAccepting: boolean;
+  isRejecting: boolean;
+  isCancelling: boolean;
+  testId: string;
+}) {
+  const isModPending = status === 'ModificationPending';
+  const canCancel =
+    status === 'PendingApproval' || status === 'Approved' || status === 'ModificationPending' || status === 'Confirmed';
+
+  if (!isModPending && !canCancel) {
+    return <p className="text-color-secondary m-0">No hay acciones disponibles para este pedido.</p>;
+  }
+
+  return (
+    <div className="flex flex-column gap-2">
+      {isModPending && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            id={`${testId}-accept-mods`}
+            data-testid={`${testId}-accept-mods`}
+            label="Aceptar cambios"
+            icon="pi pi-check"
+            severity="success"
+            onClick={onAcceptMods}
+            loading={isAccepting}
+          />
+          <Button
+            id={`${testId}-reject-mods`}
+            data-testid={`${testId}-reject-mods`}
+            label="Rechazar cambios"
+            icon="pi pi-times"
+            severity="danger"
+            onClick={onRejectMods}
+            loading={isRejecting}
+            outlined
+          />
+        </div>
+      )}
+
+      {canCancel && (
+        <Button
+          id={`${testId}-cancel`}
+          data-testid={`${testId}-cancel`}
+          label="Cancelar pedido"
+          icon="pi pi-ban"
+          severity="secondary"
+          onClick={onCancel}
+          loading={isCancelling}
+          outlined
+        />
+      )}
     </div>
   );
 }
@@ -229,7 +355,13 @@ function OrderItemRow({
   item: OrderItemDto;
   testId: string;
 }) {
-  const primaryImage = item.product?.images?.find((img) => img.isPrimary) || item.product?.images?.[0];
+  const fallbackImage = item.product?.images?.find((img) => img.isPrimary) || item.product?.images?.[0];
+  const imageUrl = item.productImageUrl
+    ? buildAssetUrl(item.productImageUrl)
+    : fallbackImage?.url
+      ? buildAssetUrl(fallbackImage.url)
+      : null;
+  const imageAlt = item.productImageAlt || fallbackImage?.altText || item.productName;
 
   return (
     <div
@@ -242,19 +374,19 @@ function OrderItemRow({
         className="relative border-round overflow-hidden flex-shrink-0"
         style={{ width: '80px', height: '80px' }}
       >
-        {primaryImage?.url ? (
-          <Image
-            src={primaryImage.url}
-            alt={item.productName}
-            fill
-            className="object-cover"
-            sizes="80px"
-          />
-        ) : (
-          <div className="w-full h-full product-image-placeholder">
-            <i className="pi pi-image" />
-          </div>
-        )}
+          {imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={imageAlt}
+              fill
+              className="object-cover"
+              sizes="80px"
+            />
+          ) : (
+            <div className="w-full h-full product-image-placeholder">
+              <i className="pi pi-image" />
+            </div>
+          )}
       </div>
 
       {/* Info */}
@@ -262,6 +394,9 @@ function OrderItemRow({
         <h4 className="m-0 font-medium text-color" data-testid={`${testId}-name`}>
           {item.productName}
         </h4>
+        <span className="text-color-secondary text-sm" data-testid={`${testId}-code`}>
+          Código: {item.productCode}
+        </span>
         <div className="flex align-items-center gap-2 mt-1 text-color-secondary text-sm">
           <span data-testid={`${testId}-quantity`}>
             Cantidad: {item.quantity}

@@ -14,7 +14,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <AuthGuard testId="dashboard-guard">
+    <AuthGuard allowedRoles={["USER"]} testId="dashboard-guard">
       <div
         id="dashboard-layout"
         data-testid="dashboard-layout"

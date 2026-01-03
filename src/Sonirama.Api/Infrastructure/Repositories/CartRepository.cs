@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Sonirama.Api.Application.Common.Exceptions;
 using Sonirama.Api.Application.Common.Interfaces;
 using Sonirama.Api.Domain.Entities;
 
@@ -18,6 +19,9 @@ public sealed class CartRepository(AppDbContext db) : ICartRepository
 
     public async Task<Cart> CreateAsync(Guid userId, CancellationToken ct)
     {
+        var userExists = await db.Users.AnyAsync(u => u.Id == userId, ct);
+        if (!userExists) throw new NotFoundException("Usuario no encontrado para crear el carrito");
+
         var cart = new Cart { UserId = userId, CreatedAtUtc = DateTime.UtcNow, UpdatedAtUtc = DateTime.UtcNow };
         await db.Carts.AddAsync(cart, ct);
         await db.SaveChangesAsync(ct);

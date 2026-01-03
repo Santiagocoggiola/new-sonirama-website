@@ -63,7 +63,7 @@ export const updateProfileSchema = z.object({
     .string()
     .min(1, { message: 'El apellido es obligatorio' })
     .max(100, { message: 'El apellido no puede superar los 100 caracteres' }),
-  phone: z
+  phoneNumber: z
     .string()
     .max(30, { message: 'El teléfono no puede superar los 30 caracteres' })
     .nullable()

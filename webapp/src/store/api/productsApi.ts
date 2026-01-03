@@ -11,6 +11,33 @@ import type {
   PagedResult,
 } from '@/types';
 
+const buildProductFormData = (
+  body: ProductCreateRequest | ProductUpdateRequest,
+  includeCode: boolean
+) => {
+  const formData = new FormData();
+
+  const appendIfPresent = (key: string, value: unknown) => {
+    if (value === undefined || value === null || value === '') return;
+    formData.append(key, String(value));
+  };
+
+  if (includeCode && 'code' in body) {
+    appendIfPresent('code', body.code);
+  }
+
+  appendIfPresent('name', body.name);
+  appendIfPresent('description', body.description);
+  appendIfPresent('price', body.price);
+  appendIfPresent('currency', body.currency ?? 'ARS');
+  appendIfPresent('category', body.category);
+  appendIfPresent('isActive', body.isActive ?? true);
+
+  body.images?.forEach((file) => formData.append('images', file));
+
+  return formData;
+};
+
 export const productsApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
     getProducts: builder.query<PagedResult<ProductDto>, ProductListParams | void>({
@@ -39,7 +66,7 @@ export const productsApi = baseApi.injectEndpoints({
       query: (body) => ({
         url: '/products',
         method: 'POST',
-        body,
+        body: buildProductFormData(body, true),
       }),
       invalidatesTags: [{ type: 'Products', id: 'LIST' }],
     }),
@@ -50,7 +77,7 @@ export const productsApi = baseApi.injectEndpoints({
       query: ({ id, body }) => ({
         url: `/products/${id}`,
         method: 'PUT',
-        body,
+        body: buildProductFormData(body, false),
       }),
       invalidatesTags: (result, error, { id }) => [
         { type: 'Product', id },

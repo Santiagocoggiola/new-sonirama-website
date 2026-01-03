@@ -32,6 +32,7 @@ export function AdminSidebar({
 
   const navItems: NavItem[] = [
     { label: 'Productos', icon: 'pi pi-box', path: '/admin/products' },
+    { label: 'Catálogo (vista cliente)', icon: 'pi pi-eye', path: '/admin/products/catalog' },
     { label: 'Categorías', icon: 'pi pi-tags', path: '/admin/categories' },
     { label: 'Órdenes', icon: 'pi pi-shopping-cart', path: '/admin/orders' },
     { label: 'Usuarios', icon: 'pi pi-users', path: '/admin/users' },

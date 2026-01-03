@@ -204,7 +204,7 @@ export async function cleanupByName(
       if (await confirmBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
         await confirmBtn.click();
       }
-      await page.waitForTimeout(500);
+      await waitForToast(page).catch(() => undefined);
     }
   }
 }

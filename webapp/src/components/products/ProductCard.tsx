@@ -2,24 +2,29 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Card } from 'primereact/card';
 import { Button } from 'primereact/button';
 import { Tag } from 'primereact/tag';
 import { useCart } from '@/hooks/useCart';
-import { formatPrice } from '@/lib/utils';
+import { buildAssetUrl, formatPrice, isLocalAssetHost } from '@/lib/utils';
 import type { ProductDto } from '@/types/product';
 
 interface ProductCardProps {
   product: ProductDto;
   /** Test ID for Playwright */
   testId?: string;
+  /** Presentation mode */
+  mode?: 'user' | 'admin-preview';
 }
 
 /**
  * Product card component for grid display
  */
-export function ProductCard({ product, testId = 'product-card' }: ProductCardProps) {
+export function ProductCard({ product, testId = 'product-card', mode = 'user' }: ProductCardProps) {
+  const router = useRouter();
   const { addItem, isLoading } = useCart();
+  const isAdminMode = mode === 'admin-preview';
   const cardId = `${testId}-${product.id}`;
 
   const handleAddToCart = async (e: React.MouseEvent) => {
@@ -28,11 +33,19 @@ export function ProductCard({ product, testId = 'product-card' }: ProductCardPro
     await addItem(product.id, 1);
   };
 
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    router.push(`/admin/products/${product.id}`);
+  };
+
   const primaryImage = product.images?.[0];
+  const imageSrc = buildAssetUrl(primaryImage?.url);
+  const href = isAdminMode ? `/admin/products/${product.id}` : `/products/${product.id}`;
 
   return (
     <Link
-      href={`/products/${product.id}`}
+      href={href}
       className="no-underline"
     >
       <Card
@@ -49,9 +62,12 @@ export function ProductCard({ product, testId = 'product-card' }: ProductCardPro
           className="relative w-full border-round-top overflow-hidden bg-surface-100"
           style={{ aspectRatio: '1/1' }}
         >
-          {primaryImage?.url ? (
+          {imageSrc ? (
             <Image
-              src={primaryImage.url}
+              src={imageSrc}
+              loading="eager"
+              priority
+              unoptimized={isLocalAssetHost}
               alt={product.name}
               fill
               className="object-cover"
@@ -105,17 +121,30 @@ export function ProductCard({ product, testId = 'product-card' }: ProductCardPro
             </span>
           </div>
 
-          {/* Add to cart button */}
-          <Button
-            id={`${cardId}-add-to-cart`}
-            data-testid={`${cardId}-add-to-cart`}
-            icon="pi pi-shopping-cart"
-            label="Agregar"
-            size="small"
-            className="w-full mt-2"
-            loading={isLoading}
-            onClick={handleAddToCart}
-          />
+          {/* Action */}
+          {isAdminMode ? (
+            <Button
+              id={`${cardId}-edit`}
+              data-testid={`${cardId}-edit`}
+              icon="pi pi-pencil"
+              label="Editar"
+              size="small"
+              className="w-full mt-2"
+              severity="secondary"
+              onClick={handleEdit}
+            />
+          ) : (
+            <Button
+              id={`${cardId}-add-to-cart`}
+              data-testid={`${cardId}-add-to-cart`}
+              icon="pi pi-shopping-cart"
+              label="Agregar"
+              size="small"
+              className="w-full mt-2"
+              loading={isLoading}
+              onClick={handleAddToCart}
+            />
+          )}
         </div>
       </Card>
     </Link>

@@ -65,25 +65,38 @@ export function NotificationBell({ testId = 'notification-bell' }: NotificationB
 
   return (
     <>
-      <Button
-        id={testId}
-        data-testid={testId}
-        icon="pi pi-bell"
-        text
-        rounded
-        severity="secondary"
-        onClick={(e) => overlayRef.current?.toggle(e)}
-        aria-label="Notificaciones"
-        className="p-overlay-badge"
-      >
+      <span className="p-overlay-badge" style={{ position: 'relative' }}>
+        <Button
+          id={testId}
+          data-testid={testId}
+          icon="pi pi-bell"
+          text
+          rounded
+          severity="secondary"
+          onClick={(e) => overlayRef.current?.toggle(e)}
+          aria-label="Notificaciones"
+        />
         {unreadCount > 0 && (
           <Badge
             value={unreadCount > 99 ? '99+' : unreadCount}
             severity="danger"
             data-testid={`${testId}-badge`}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '-4px',
+              fontSize: '0.75rem',
+              minWidth: '1.5rem',
+              height: '1.5rem',
+              lineHeight: '1.5rem',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           />
         )}
-      </Button>
+      </span>
 
       <OverlayPanel
         ref={overlayRef}

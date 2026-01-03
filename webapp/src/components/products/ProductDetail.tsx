@@ -11,7 +11,7 @@ import { Skeleton } from 'primereact/skeleton';
 import { Divider } from 'primereact/divider';
 import { useGetProductByIdQuery } from '@/store/api/productsApi';
 import { useCart } from '@/hooks/useCart';
-import { formatPrice } from '@/lib/utils';
+import { buildAssetUrl, formatPrice, isLocalAssetHost } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { ProductImageDto } from '@/types/product';
 
@@ -47,11 +47,14 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
   };
 
   // Gallery templates
-  const itemTemplate = (item: ProductImageDto) => (
+  const itemTemplate = (item: ProductImageDto) => {
+    const src = buildAssetUrl(item.url);
+    return (
     <div className="relative w-full" style={{ height: '400px' }}>
-      {item.url ? (
+      {src ? (
         <Image
-          src={item.url}
+          src={src}
+          unoptimized={isLocalAssetHost}
           alt={product?.name || 'Producto'}
           fill
           className="object-contain"
@@ -64,12 +67,16 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
       )}
     </div>
   );
+  };
 
-  const thumbnailTemplate = (item: ProductImageDto) => (
+  const thumbnailTemplate = (item: ProductImageDto) => {
+    const src = buildAssetUrl(item.url);
+    return (
     <div className="relative" style={{ width: '80px', height: '80px' }}>
-      {item.url ? (
+      {src ? (
         <Image
-          src={item.url}
+          src={src}
+          unoptimized={isLocalAssetHost}
           alt="Thumbnail"
           fill
           className="object-cover border-round"
@@ -82,6 +89,7 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
       )}
     </div>
   );
+  };
 
   if (isLoading) {
     return (

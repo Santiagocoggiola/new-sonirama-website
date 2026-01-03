@@ -30,16 +30,22 @@ public sealed class ProductsController(IProductService service) : ControllerBase
     // POST api/products
     [HttpPost]
     [Authorize(Roles = "ADMIN")]
-    public async Task<IActionResult> CreateAsync([FromBody] ProductCreateRequest request, CancellationToken ct)
+    [Consumes("multipart/form-data")]
+    [RequestFormLimits(MultipartBodyLengthLimit = 60 * 1024 * 1024)]
+    [RequestSizeLimit(60 * 1024 * 1024)]
+    public async Task<IActionResult> CreateAsync([FromForm] ProductCreateRequest request, CancellationToken ct)
     {
         var created = await service.CreateAsync(request, ct);
-        return CreatedAtAction(nameof(GetByIdAsync), new { id = created.Id }, created);
+        return Created($"api/products/{created.Id}", created);
     }
 
     // PUT api/products/{id}
     [HttpPut("{id:guid}")]
     [Authorize(Roles = "ADMIN")]
-    public async Task<IActionResult> UpdateAsync(Guid id, [FromBody] ProductUpdateRequest request, CancellationToken ct)
+    [Consumes("multipart/form-data")]
+    [RequestFormLimits(MultipartBodyLengthLimit = 60 * 1024 * 1024)]
+    [RequestSizeLimit(60 * 1024 * 1024)]
+    public async Task<IActionResult> UpdateAsync(Guid id, [FromForm] ProductUpdateRequest request, CancellationToken ct)
         => Ok(await service.UpdateAsync(id, request, ct));
 
     // POST api/products/{id}/images

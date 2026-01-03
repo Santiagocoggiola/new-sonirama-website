@@ -4,7 +4,20 @@
 
 import * as signalR from '@microsoft/signalr';
 
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'https://localhost:5001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL ||
+  (() => {
+    if (!apiUrl) return 'https://localhost:5001';
+    try {
+      const parsed = new URL(apiUrl);
+      // strip /api if present
+      const pathname = parsed.pathname.replace(/\/?api\/?$/, '/');
+      return `${parsed.protocol}//${parsed.host}${pathname.replace(/\/$/, '')}`;
+    } catch {
+      return 'https://localhost:5001';
+    }
+  })();
+
 const HUB_URL = `${WS_BASE_URL}/hubs/orders`;
 
 let connection: signalR.HubConnection | null = null;
@@ -34,7 +47,10 @@ export function createSignalRConnection(options: SignalROptions): signalR.HubCon
   connection = new signalR.HubConnectionBuilder()
     .withUrl(HUB_URL, {
       accessTokenFactory: () => accessToken,
-      transport: signalR.HttpTransportType.WebSockets | signalR.HttpTransportType.ServerSentEvents,
+      transport:
+        signalR.HttpTransportType.WebSockets |
+        signalR.HttpTransportType.ServerSentEvents |
+        signalR.HttpTransportType.LongPolling,
     })
     .withAutomaticReconnect({
       nextRetryDelayInMilliseconds: (retryContext) => {

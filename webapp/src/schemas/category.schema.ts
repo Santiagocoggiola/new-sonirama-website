@@ -5,19 +5,12 @@ export const categoryCreateSchema = z.object({
     .string()
     .min(1, { message: 'El nombre es obligatorio' })
     .max(100, { message: 'El nombre no puede superar los 100 caracteres' }),
-  slug: z
-    .string()
-    .min(1, { message: 'El slug es obligatorio' })
-    .max(100, { message: 'El slug no puede superar los 100 caracteres' })
-    .regex(/^[a-z0-9-]+$/, {
-      message: 'El slug solo puede contener letras minúsculas, números y guiones',
-    }),
   description: z
     .string()
     .max(500, { message: 'La descripción no puede superar los 500 caracteres' })
     .optional(),
   isActive: z.boolean(),
-  parentIds: z.array(z.string().uuid()).optional(),
+  parentIds: z.array(z.string().uuid()).default([]),
 });
 
 // Use z.output for the form values type to get the type after defaults are applied

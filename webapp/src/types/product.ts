@@ -45,6 +45,7 @@ export interface ProductCreateRequest {
   currency?: string;
   category?: string;
   isActive?: boolean;
+  images?: File[];
 }
 
 export interface ProductUpdateRequest {
@@ -54,6 +55,7 @@ export interface ProductUpdateRequest {
   currency?: string;
   category?: string;
   isActive?: boolean;
+  images?: File[];
 }
 
 export interface ProductListParams {

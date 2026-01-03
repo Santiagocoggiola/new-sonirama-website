@@ -12,12 +12,14 @@ import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 interface ProductsGridProps {
   /** Test ID for Playwright */
   testId?: string;
+  /** Presentation mode */
+  mode?: 'user' | 'admin-preview';
 }
 
 /**
  * Products grid with infinite scroll and filtering
  */
-export function ProductsGrid({ testId = 'products-grid' }: ProductsGridProps) {
+export function ProductsGrid({ testId = 'products-grid', mode = 'user' }: ProductsGridProps) {
   const filters = useAppSelector(selectFilters);
   
   const {
@@ -111,6 +113,7 @@ export function ProductsGrid({ testId = 'products-grid' }: ProductsGridProps) {
             <ProductCard
               product={product}
               testId="product-card"
+              mode={mode}
             />
           </div>
         ))}

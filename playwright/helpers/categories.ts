@@ -14,7 +14,7 @@ export interface CategoryTestData {
  * Helper class for category operations in tests
  */
 export class CategoryHelper {
-  constructor(private page: Page) {}
+  constructor(private page: Page, private tableTestId = 'admin-categories-table') {}
 
   /**
    * Navigate to admin categories page
@@ -22,7 +22,7 @@ export class CategoryHelper {
   async navigateToCategories(): Promise<void> {
     await this.page.goto('/admin/categories');
     await this.page.waitForLoadState('networkidle');
-    await expect(this.page.getByTestId('admin-categories-table')).toBeVisible({ timeout: 15000 });
+    await expect(this.page.getByTestId(this.tableTestId)).toBeVisible({ timeout: 15000 });
   }
 
   /**
@@ -76,12 +76,14 @@ export class CategoryHelper {
     await this.page.waitForTimeout(500);
     await this.searchCategory(category.name);
 
-    // Try to extract ID from the row
-    const categoryRow = this.page.locator(`[data-testid^="admin-categories-table-category-"]`).first();
-    const testId = await categoryRow.getAttribute('data-testid').catch(() => null);
-    const categoryId = testId?.replace('admin-categories-table-category-', '').split('-')[0] || '';
+    const row = this.page.locator('tbody tr').filter({ hasText: category.name }).first();
+    const editBtn = row.locator(`[data-testid^="${this.tableTestId}-category-"][data-testid$="-edit"]`).first();
+    const testId = await editBtn.getAttribute('data-testid').catch(() => null);
 
-    return categoryId;
+    return testId
+      ?.replace(`${this.tableTestId}-category-`, '')
+      .replace('-edit', '')
+      .trim() || '';
   }
 
   /**
@@ -91,14 +93,14 @@ export class CategoryHelper {
     await this.navigateToCategories();
 
     // Click edit button for the category
-    const editBtn = this.page.getByTestId(`admin-categories-table-category-${categoryId}-edit`);
+    const editBtn = this.page.getByTestId(`${this.tableTestId}-category-${categoryId}-edit`);
     
-    if (await editBtn.isVisible({ timeout: 5000 })) {
+    if (await editBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await editBtn.click();
     } else {
-      // Try to find by row content
+      // Try to find by row content if we could not locate by id
       const row = this.page.locator('tr').filter({ hasText: categoryId }).first();
-      await row.locator('[data-testid*="edit"]').click();
+      await row.locator('[data-testid*="edit"]').first().click();
     }
 
     // Wait for dialog
@@ -145,7 +147,7 @@ export class CategoryHelper {
     await this.navigateToCategories();
 
     // Find and click delete button
-    const deleteBtn = this.page.getByTestId(`admin-categories-table-category-${categoryId}-delete`);
+    const deleteBtn = this.page.getByTestId(`${this.tableTestId}-category-${categoryId}-delete`);
     
     if (await deleteBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
       await deleteBtn.click();
@@ -153,7 +155,9 @@ export class CategoryHelper {
       // Confirm deletion
       const confirmDialog = this.page.locator('.p-confirmdialog, .p-dialog');
       if (await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmDialog.getByRole('button', { name: /confirmar|sí|yes|delete|eliminar/i }).click();
+        await confirmDialog
+          .getByRole('button', { name: /aceptar|confirmar|sí|yes|delete|eliminar|ok/i })
+          .click();
       }
 
       await this.page.waitForTimeout(500);
@@ -164,7 +168,7 @@ export class CategoryHelper {
    * Search for a category
    */
   async searchCategory(query: string): Promise<void> {
-    const searchInput = this.page.getByTestId('admin-categories-table-search');
+    const searchInput = this.page.getByTestId(`${this.tableTestId}-search`);
     if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchInput.clear();
       await searchInput.fill(query);

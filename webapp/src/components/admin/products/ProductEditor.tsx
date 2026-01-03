@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from 'primereact/card';
 import { InputText } from 'primereact/inputtext';
@@ -35,6 +35,7 @@ interface ProductEditorProps {
 export function ProductEditor({ productId, testId = 'product-editor' }: ProductEditorProps) {
   const router = useRouter();
   const isEditing = !!productId;
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
   // Queries
   const {
@@ -68,33 +69,87 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
   } = useForm<ProductCreateFormValues | ProductUpdateFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
+      code: '',
       name: '',
       description: '',
-      price: 0,
+      price: undefined,
       category: '',
+      currency: 'ARS',
       isActive: true,
     },
   });
+
+  const currencyValue = useWatch({ control, name: 'currency' });
 
   // Load product data when editing
   useEffect(() => {
     if (product) {
       reset({
+        code: product.code,
         name: product.name,
         description: product.description || '',
         price: product.price,
         category: product.category || '',
+        currency: product.currency || 'ARS',
         isActive: product.isActive,
       });
     }
   }, [product, reset]);
 
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+
+    if (files.length === 0) {
+      setSelectedFiles([]);
+      return;
+    }
+
+    if (files.length > 10) {
+      showToast({ severity: 'warn', summary: 'Límite de imágenes', detail: 'Solo podés subir hasta 10 imágenes por vez.' });
+      setSelectedFiles(files.slice(0, 10));
+      return;
+    }
+
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    const invalidFile = files.find((f) => !allowed.includes(f.type));
+    if (invalidFile) {
+      showToast({ severity: 'error', summary: 'Formato no soportado', detail: 'Solo se aceptan JPG, PNG o WEBP.' });
+      return;
+    }
+
+    setSelectedFiles(files);
+  };
+
   const onSubmit = async (data: ProductCreateFormValues | ProductUpdateFormValues) => {
     try {
+      const priceValue = typeof data.price === 'number' ? data.price : Number(data.price);
+      const normalized = {
+        ...data,
+        code: 'code' in data ? data.code.trim() : undefined,
+        name: data.name.trim(),
+        description: data.description?.trim() || undefined,
+        category: data.category || undefined,
+        currency: (data.currency || 'ARS').toUpperCase(),
+        price: priceValue,
+      };
+
+      if (!Number.isFinite(normalized.price) || normalized.price <= 0) {
+        showToast({ severity: 'error', summary: 'Error', detail: 'El precio debe ser mayor a 0' });
+        return;
+      }
+
       if (isEditing) {
         await updateProduct({
           id: productId!,
-          body: data as ProductUpdateFormValues,
+          body: {
+            name: normalized.name,
+            description: normalized.description,
+            price: normalized.price,
+            category: normalized.category,
+            currency: normalized.currency,
+            isActive: normalized.isActive,
+            images: selectedFiles.length ? selectedFiles : undefined,
+          },
         }).unwrap();
         showToast({
           severity: 'success',
@@ -102,13 +157,23 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
           detail: 'El producto fue actualizado correctamente',
         });
       } else {
-        await createProduct(data as ProductCreateFormValues).unwrap();
+        await createProduct({
+          code: normalized.code?.trim() || '',
+          name: normalized.name,
+          description: normalized.description,
+          price: normalized.price,
+          category: normalized.category,
+          currency: normalized.currency,
+          isActive: normalized.isActive,
+          images: selectedFiles,
+        }).unwrap();
         showToast({
           severity: 'success',
           summary: 'Producto creado',
           detail: 'El producto fue creado correctamente',
         });
       }
+      setSelectedFiles([]);
       router.push('/admin/products');
     } catch (error: unknown) {
       const errorMessage =
@@ -158,6 +223,29 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
   return (
     <Card id={testId} data-testid={testId}>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-column gap-4">
+        {/* Code */}
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-code`} className="font-medium">
+            Código <span className="text-red-500">*</span>
+          </label>
+          <Controller
+            name="code"
+            control={control}
+            render={({ field }) => (
+              <InputText
+                {...field}
+                id={`${testId}-code`}
+                data-testid={`${testId}-code`}
+                className={`w-full ${errors.code ? 'p-invalid' : ''}`}
+                disabled={isEditing}
+              />
+            )}
+          />
+          {errors.code && (
+            <small className="p-error">{errors.code.message}</small>
+          )}
+        </div>
+
         {/* Name */}
         <div className="flex flex-column gap-2">
           <label htmlFor={`${testId}-name`} className="font-medium">
@@ -214,13 +302,17 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
             control={control}
             render={({ field }) => (
               <InputNumber
-                {...field}
-                id={`${testId}-price`}
+                inputId={`${testId}-price`}
                 data-testid={`${testId}-price`}
+                value={field.value ?? null}
+                onBlur={field.onBlur}
                 mode="currency"
-                currency="ARS"
+                currency={currencyValue || 'ARS'}
                 locale="es-AR"
-                onValueChange={(e) => field.onChange(e.value)}
+                useGrouping
+                minFractionDigits={0}
+                maxFractionDigits={2}
+                onValueChange={(e) => field.onChange(e.value ?? null)}
                 className={`w-full ${errors.price ? 'p-invalid' : ''}`}
               />
             )}
@@ -255,6 +347,30 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
           )}
         </div>
 
+        {/* Currency */}
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-currency`} className="font-medium">
+            Moneda <span className="text-red-500">*</span>
+          </label>
+          <Controller
+            name="currency"
+            control={control}
+            render={({ field }) => (
+              <InputText
+                {...field}
+                id={`${testId}-currency`}
+                data-testid={`${testId}-currency`}
+                maxLength={3}
+                onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                className={`w-full ${errors.currency ? 'p-invalid' : ''}`}
+              />
+            )}
+          />
+          {errors.currency && (
+            <small className="p-error">{errors.currency.message}</small>
+          )}
+        </div>
+
         {/* Is Active */}
         <div className="flex align-items-center gap-2">
           <Controller
@@ -272,6 +388,35 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
           <label htmlFor={`${testId}-isActive`} className="font-medium cursor-pointer">
             Producto activo
           </label>
+        </div>
+
+        {/* Images */}
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-images`} className="font-medium">
+            Imágenes (JPG, PNG o WEBP) — hasta 10
+          </label>
+          <input
+            id={`${testId}-images`}
+            data-testid={`${testId}-images`}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            onChange={handleFileChange}
+          />
+          {selectedFiles.length > 0 ? (
+            <small className="text-color-secondary">
+              {selectedFiles.length} imagen{selectedFiles.length === 1 ? '' : 'es'} seleccionada{selectedFiles.length === 1 ? '' : 's'}.
+            </small>
+          ) : (
+            <small className="text-color-secondary">
+              Podés agregar imágenes ahora o más tarde desde la edición.
+            </small>
+          )}
+          {isEditing && product?.images?.length ? (
+            <small className="text-color-secondary">
+              Imágenes actuales: {product.images.length}
+            </small>
+          ) : null}
         </div>
 
         {/* Actions */}

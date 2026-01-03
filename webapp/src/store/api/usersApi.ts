@@ -69,6 +69,13 @@ export const usersApi = baseApi.injectEndpoints({
         params: { email, code },
       }),
     }),
+    confirmEmailVerification: builder.mutation<void, { email: string; code: string }>({
+      query: ({ email, code }) => ({
+        url: '/users/verify/confirm',
+        method: 'POST',
+        params: { email, code },
+      }),
+    }),
     forcePasswordReset: builder.mutation<void, string>({
       query: (userId) => ({
         url: `/users/${userId}/password-reset/force`,
@@ -80,7 +87,10 @@ export const usersApi = baseApi.injectEndpoints({
       query: () => '/users/me',
       providesTags: ['Profile'],
     }),
-    updateProfile: builder.mutation<UserDto, { firstName: string; lastName: string; phone?: string | null }>({
+    updateProfile: builder.mutation<
+      UserDto,
+      { firstName: string; lastName: string; phoneNumber?: string | null }
+    >({
       query: (body) => ({
         url: '/users/me',
         method: 'PUT',
@@ -107,6 +117,7 @@ export const {
   useDeleteUserMutation,
   usePasswordResetStartMutation,
   usePasswordResetConfirmMutation,
+  useConfirmEmailVerificationMutation,
   useForcePasswordResetMutation,
   useGetMyProfileQuery,
   useUpdateProfileMutation,

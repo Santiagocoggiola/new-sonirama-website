@@ -2,9 +2,18 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { selectAccessToken, selectIsAuthenticated, selectIsAdmin } from '@/store/slices/authSlice';
+import {
+  selectAccessToken,
+  selectIsAuthenticated,
+  selectIsAdmin,
+  selectRefreshToken,
+  setTokens,
+  logout,
+} from '@/store/slices/authSlice';
+import { useRefreshMutation } from '@/store/api/authApi';
 import { addNotification, setUnreadCount } from '@/store/slices/notificationsSlice';
 import { ordersApi } from '@/store/api/ordersApi';
+import { notificationsApi } from '@/store/api/notificationsApi';
 import {
   createSignalRConnection,
   startConnection,
@@ -28,12 +37,15 @@ export function useSignalR(options: UseSignalROptions = {}) {
   const dispatch = useAppDispatch();
   
   const accessToken = useAppSelector(selectAccessToken);
+  const refreshToken = useAppSelector(selectRefreshToken);
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const isAdmin = useAppSelector(selectIsAdmin);
+  const [refresh] = useRefreshMutation();
   
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [error, setError] = useState<Error | null>(null);
-  const connectionAttemptedRef = useRef(false);
+  const connectingRef = useRef(false);
+  const tokenUsedRef = useRef<string | null>(null);
 
   /**
    * Handle OrderCreated event
@@ -95,6 +107,14 @@ export function useSignalR(options: UseSignalROptions = {}) {
       // Add to notifications state
       dispatch(addNotification(notification));
 
+       // Force-fetch server state to keep list + counts in sync
+      dispatch(
+        notificationsApi.util.invalidateTags([
+          { type: 'Notifications', id: 'LIST' },
+          { type: 'Notifications', id: 'UNREAD_COUNT' },
+        ])
+      );
+
       // Show toast
       showToast({
         severity: getNotificationSeverity(notification.type),
@@ -120,14 +140,53 @@ export function useSignalR(options: UseSignalROptions = {}) {
    * Connect to SignalR hub
    */
   const connect = useCallback(async () => {
-    if (!accessToken || !enabled) return;
+    if (!enabled || !isAuthenticated) return;
+    if (connectingRef.current) return;
+    connectingRef.current = true;
 
     setError(null);
     setConnectionState('connecting');
 
     try {
+      // Ensure we have a valid access token; refresh if missing/expired
+      let tokenToUse = accessToken;
+      if (!tokenToUse && refreshToken) {
+        try {
+          const refreshed = await refresh({ refreshToken }).unwrap();
+          tokenToUse = refreshed.accessToken;
+          dispatch(
+            setTokens({
+              accessToken: refreshed.accessToken,
+              refreshToken: refreshed.refreshToken,
+            })
+          );
+        } catch (refreshError) {
+          console.error('SignalR token refresh failed:', refreshError);
+          dispatch(logout());
+          throw refreshError;
+        }
+      }
+
+      if (!tokenToUse) {
+        throw new Error('No access token available for SignalR connection');
+      }
+
+      // Avoid rebuilding the connection if already connected with the same token
+      const existing = getConnection();
+      if (
+        existing &&
+        existing.state === 'Connected' &&
+        tokenUsedRef.current === tokenToUse
+      ) {
+        setConnectionState('connected');
+        connectingRef.current = false;
+        return;
+      }
+
+      tokenUsedRef.current = tokenToUse;
+
       createSignalRConnection({
-        accessToken,
+        accessToken: tokenToUse,
         onConnectionStateChange: setConnectionState,
         onReconnecting: (err) => {
           console.warn('SignalR reconnecting:', err);
@@ -163,13 +222,44 @@ export function useSignalR(options: UseSignalROptions = {}) {
       }
     } catch (err) {
       console.error('Failed to connect to SignalR:', err);
+      // If unauthorized, try a single refresh + retry
+      const shouldRetry =
+        refreshToken &&
+        err instanceof Error &&
+        /401|Unauthorized/i.test(err.message);
+
+      if (shouldRetry) {
+        try {
+          const refreshed = await refresh({ refreshToken }).unwrap();
+          dispatch(
+            setTokens({
+              accessToken: refreshed.accessToken,
+              refreshToken: refreshed.refreshToken,
+            })
+          );
+          tokenUsedRef.current = null;
+          connectingRef.current = false;
+          await connect();
+          return;
+        } catch (refreshError) {
+          console.error('SignalR retry after refresh failed:', refreshError);
+          dispatch(logout());
+        }
+      }
+
       setError(err instanceof Error ? err : new Error('Connection failed'));
       setConnectionState('disconnected');
+    } finally {
+      connectingRef.current = false;
     }
   }, [
     accessToken,
+    refreshToken,
+    refresh,
+    dispatch,
     enabled,
     isAdmin,
+    isAuthenticated,
     handleOrderCreated,
     handleOrderUpdated,
     handleNewNotification,
@@ -188,22 +278,21 @@ export function useSignalR(options: UseSignalROptions = {}) {
 
     await stopConnection();
     setConnectionState('disconnected');
+    tokenUsedRef.current = null;
   }, []);
 
   // Connect when authenticated, disconnect when not
   useEffect(() => {
-    if (isAuthenticated && accessToken && enabled && !connectionAttemptedRef.current) {
-      connectionAttemptedRef.current = true;
+    if (isAuthenticated && enabled) {
       connect();
+    } else {
+      disconnect();
     }
 
     return () => {
-      if (connectionAttemptedRef.current) {
-        disconnect();
-        connectionAttemptedRef.current = false;
-      }
+      disconnect();
     };
-  }, [isAuthenticated, accessToken, enabled, connect, disconnect]);
+  }, [isAuthenticated, enabled, accessToken, refreshToken, connect, disconnect]);
 
   // Reconnect when access token changes (after refresh)
   useEffect(() => {

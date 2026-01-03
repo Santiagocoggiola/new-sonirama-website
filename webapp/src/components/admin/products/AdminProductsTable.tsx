@@ -9,10 +9,13 @@ import { InputText } from 'primereact/inputtext';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 import { Tag } from 'primereact/tag';
+import { InputSwitch } from 'primereact/inputswitch';
+import { Dialog } from 'primereact/dialog';
 import { ProgressSpinner } from 'primereact/progressspinner';
-import { useGetProductsQuery } from '@/store/api/productsApi';
+import { useGetProductsQuery, useDeleteProductMutation, useUpdateProductMutation } from '@/store/api/productsApi';
 import { formatPrice } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { showToast } from '@/components/ui/toast-service';
 import type { ProductDto } from '@/types/product';
 
 interface AdminProductsTableProps {
@@ -26,11 +29,14 @@ interface AdminProductsTableProps {
 export function AdminProductsTable({ testId = 'admin-products-table' }: AdminProductsTableProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const [productToDelete, setProductToDelete] = useState<ProductDto | null>(null);
   
   const { data, isLoading, isError } = useGetProductsQuery({
     query: searchQuery || undefined,
     pageSize: 50,
   });
+  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
+  const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
 
   const products = data?.items ?? [];
 
@@ -62,26 +68,64 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
   );
 
   const statusTemplate = (product: ProductDto) => (
-    <Tag
-      severity={product.isActive ? 'success' : 'danger'}
-      value={product.isActive ? 'Activo' : 'Inactivo'}
-      data-testid={`${testId}-product-${product.id}-status`}
-    />
+    <div className="flex align-items-center gap-2">
+      <Tag
+        severity={product.isActive ? 'success' : 'danger'}
+        value={product.isActive ? 'Activo' : 'Inactivo'}
+        data-testid={`${testId}-product-${product.id}-status`}
+      />
+      <InputSwitch
+        checked={product.isActive}
+        onChange={async (e) => {
+          try {
+            await updateProduct({
+              id: product.id,
+              body: {
+                name: product.name,
+                description: product.description || undefined,
+                price: product.price,
+                currency: product.currency,
+                category: product.category || undefined,
+                isActive: e.value,
+              },
+            }).unwrap();
+            showToast({ severity: 'success', summary: e.value ? 'Producto activado' : 'Producto desactivado' });
+          } catch {
+            showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el producto' });
+          }
+        }}
+        disabled={isUpdating}
+      />
+    </div>
   );
 
   const actionsTemplate = (product: ProductDto) => (
-    <Button
-      id={`${testId}-product-${product.id}-edit`}
-      data-testid={`${testId}-product-${product.id}-edit`}
-      icon="pi pi-pencil"
-      rounded
-      text
-      severity="secondary"
-      onClick={() => handleEditProduct(product)}
-      aria-label="Editar"
-      tooltip="Editar"
-      tooltipOptions={{ position: 'top' }}
-    />
+    <div className="flex gap-2">
+      <Button
+        id={`${testId}-product-${product.id}-edit`}
+        data-testid={`${testId}-product-${product.id}-edit`}
+        icon="pi pi-pencil"
+        rounded
+        text
+        severity="secondary"
+        onClick={() => handleEditProduct(product)}
+        aria-label="Editar"
+        tooltip="Editar"
+        tooltipOptions={{ position: 'top' }}
+      />
+      <Button
+        id={`${testId}-product-${product.id}-delete`}
+        data-testid={`${testId}-product-${product.id}-delete`}
+        icon="pi pi-trash"
+        rounded
+        text
+        severity="danger"
+        onClick={() => setProductToDelete(product)}
+        aria-label="Eliminar"
+        tooltip="Eliminar"
+        tooltipOptions={{ position: 'top' }}
+      />
+    </div>
   );
 
   if (isLoading) {
@@ -185,6 +229,44 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
           />
         </DataTable>
       )}
+
+      <Dialog
+        header="Confirmar eliminación"
+        visible={!!productToDelete}
+        onHide={() => setProductToDelete(null)}
+        style={{ width: '420px' }}
+      >
+        <p className="m-0">
+          ¿Seguro que querés eliminar el producto "{productToDelete?.name}"?
+        </p>
+        <div className="flex justify-content-end gap-2 mt-4">
+          <Button
+            type="button"
+            label="Cancelar"
+            outlined
+            severity="secondary"
+            onClick={() => setProductToDelete(null)}
+          />
+          <Button
+            type="button"
+            label="Aceptar"
+            icon="pi pi-trash"
+            severity="danger"
+            loading={isDeleting}
+            onClick={async () => {
+              if (!productToDelete) return;
+              try {
+                await deleteProduct(productToDelete.id).unwrap();
+                showToast({ severity: 'success', summary: 'Producto eliminado' });
+              } catch {
+                showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar el producto' });
+              } finally {
+                setProductToDelete(null);
+              }
+            }}
+          />
+        </div>
+      </Dialog>
     </div>
   );
 }

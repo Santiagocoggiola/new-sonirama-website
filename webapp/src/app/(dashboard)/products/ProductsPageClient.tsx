@@ -5,7 +5,9 @@ import { ProductsGrid, ProductFilters } from '@/components/products';
 /**
  * Products page client component with filters
  */
-export function ProductsPageClient() {
+export type ProductsPageMode = 'user' | 'admin-preview';
+
+export function ProductsPageClient({ mode = 'user' }: { mode?: ProductsPageMode }) {
   return (
     <div id="products-page" data-testid="products-page" className="flex flex-column gap-4">
       {/* Header with title and filters */}
@@ -17,7 +19,7 @@ export function ProductsPageClient() {
       </div>
       
       {/* Products grid */}
-      <ProductsGrid testId="products-grid" />
+      <ProductsGrid testId="products-grid" mode={mode} />
     </div>
   );
 }

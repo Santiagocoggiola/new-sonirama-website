@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { waitForToast } from './auth';
 
 /**
  * Order status type
@@ -29,6 +30,21 @@ export interface OrderData {
 export class OrderHelper {
   constructor(private page: Page) {}
 
+  private async ensureAdminOrdersPage(): Promise<void> {
+    if (!this.page.url().includes('/admin/orders')) {
+      await this.navigateToAdminOrders();
+      return;
+    }
+    await expect(this.page.getByTestId('admin-orders-table')).toBeVisible({ timeout: 15000 });
+  }
+
+  private formatDateForInput(date: Date): string {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}/${mm}/${yy}`;
+  }
+
   /**
    * Navigate to user orders list
    */
@@ -45,6 +61,46 @@ export class OrderHelper {
     await this.page.goto('/admin/orders');
     await this.page.waitForLoadState('networkidle');
     await expect(this.page.getByTestId('admin-orders-table')).toBeVisible({ timeout: 15000 });
+  }
+
+  /**
+   * Clear admin order filters (search/date)
+   */
+  async clearAdminFilters(): Promise<void> {
+    await this.ensureAdminOrdersPage();
+    const clearBtn = this.page.getByTestId('admin-orders-table-clear-filters');
+    if (await clearBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await clearBtn.click();
+      await this.page.waitForTimeout(300);
+    }
+  }
+
+  /**
+   * Apply search filter in admin orders table
+   */
+  async searchAdminOrders(query: string): Promise<void> {
+    await this.ensureAdminOrdersPage();
+    const searchInput = this.page.getByTestId('admin-orders-table-search');
+    if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await searchInput.clear();
+      await searchInput.fill(query);
+      await this.waitForActionComplete();
+    }
+  }
+
+  /**
+   * Set date range filter in admin orders table
+   */
+  async setAdminDateRange(from: Date, to?: Date): Promise<void> {
+    await this.ensureAdminOrdersPage();
+    const dateInput = this.page.getByTestId('admin-orders-table-date-range').locator('input');
+    if (await dateInput.isVisible({ timeout: 2000 }).catch(() => false)) {
+      const start = this.formatDateForInput(from);
+      const end = this.formatDateForInput(to ?? from);
+      await dateInput.fill(`${start} - ${end}`);
+      await dateInput.press('Enter');
+      await this.waitForActionComplete();
+    }
   }
 
   /**
@@ -83,10 +139,10 @@ export class OrderHelper {
   async confirmOrder(orderId: string): Promise<void> {
     await this.navigateToOrderDetail(orderId, false);
     
-    const confirmBtn = this.page.getByRole('button', { name: /confirmar/i });
+    const confirmBtn = this.page.getByRole('button', { name: /aceptar|confirmar|sí|yes|ok/i });
     if (await confirmBtn.isVisible()) {
       await confirmBtn.click();
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/confirmada|confirmado|confirmar/i);
     }
   }
 
@@ -107,10 +163,9 @@ export class OrderHelper {
         if (await reasonInput.isVisible()) {
           await reasonInput.fill(reason);
         }
-        await dialog.getByRole('button', { name: /confirmar|cancelar orden/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|cancelar orden|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/cancelada|cancelado|cancelar/i);
     }
   }
 
@@ -127,10 +182,9 @@ export class OrderHelper {
       // Confirm in dialog if it appears
       const dialog = this.page.locator('.p-dialog');
       if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await dialog.getByRole('button', { name: /confirmar|aprobar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|aprobar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/aprobada|aprobado|approved/i);
     }
   }
 
@@ -151,10 +205,9 @@ export class OrderHelper {
         if (await reasonInput.isVisible()) {
           await reasonInput.fill(reason);
         }
-        await dialog.getByRole('button', { name: /confirmar|rechazar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|rechazar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/rechazada|rechazado|rejected/i);
     }
   }
 
@@ -171,10 +224,9 @@ export class OrderHelper {
       // Confirm in dialog if it appears
       const dialog = this.page.locator('.p-dialog');
       if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await dialog.getByRole('button', { name: /confirmar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/listo|ready/i);
     }
   }
 
@@ -191,10 +243,9 @@ export class OrderHelper {
       // Confirm in dialog if it appears
       const dialog = this.page.locator('.p-dialog');
       if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await dialog.getByRole('button', { name: /confirmar|completar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|completar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/completada|completado|entregada|entregado/i);
     }
   }
 
@@ -216,10 +267,9 @@ export class OrderHelper {
           await quantityInput.click({ clickCount: 3 });
           await quantityInput.fill(newQuantity.toString());
         }
-        await dialog.getByRole('button', { name: /confirmar|guardar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|guardar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/modificada|modificado|changes saved/i);
     }
   }
 
@@ -236,10 +286,9 @@ export class OrderHelper {
       // Confirm in dialog if it appears
       const dialog = this.page.locator('.p-dialog');
       if (await dialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await dialog.getByRole('button', { name: /confirmar|aceptar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/aceptada|aceptado/i);
     }
   }
 
@@ -260,10 +309,9 @@ export class OrderHelper {
         if (await reasonInput.isVisible()) {
           await reasonInput.fill(reason);
         }
-        await dialog.getByRole('button', { name: /confirmar|rechazar/i }).click();
+        await dialog.getByRole('button', { name: /aceptar|confirmar|rechazar|sí|yes|ok/i }).click();
       }
-      
-      await this.page.waitForTimeout(1000);
+      await this.waitForActionComplete(/rechazada|rechazado/i);
     }
   }
 
@@ -306,15 +354,35 @@ export class OrderHelper {
    */
   async searchOrder(orderNumber: string, isAdmin: boolean = false): Promise<void> {
     if (isAdmin) {
-      await this.navigateToAdminOrders();
-    } else {
-      await this.navigateToOrders();
+      await this.searchAdminOrders(orderNumber);
+      return;
     }
+
+    await this.navigateToOrders();
 
     const searchInput = this.page.locator('input[type="text"]').first();
     if (await searchInput.isVisible({ timeout: 2000 }).catch(() => false)) {
       await searchInput.fill(orderNumber);
-      await this.page.waitForTimeout(500);
+      await this.waitForActionComplete();
     }
+  }
+
+  /**
+   * Wait for a toast or status change instead of arbitrary sleeps.
+   */
+  private async waitForActionComplete(expectedStatus?: RegExp | string): Promise<void> {
+    const toast = this.page.getByTestId('global-toast').locator('.p-toast-message');
+
+    await Promise.race([
+      toast.waitFor({ state: 'visible', timeout: 8000 }),
+      this.page.waitForLoadState('networkidle', { timeout: 8000 })
+    ]).catch(() => undefined);
+
+    if (expectedStatus) {
+      const statusTag = this.page.locator('.p-tag').first();
+      await expect(statusTag).toContainText(expectedStatus, { timeout: 8000 }).catch(() => undefined);
+    }
+
+    await waitForToast(this.page).catch(() => undefined);
   }
 }

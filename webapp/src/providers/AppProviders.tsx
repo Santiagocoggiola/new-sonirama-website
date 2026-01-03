@@ -5,6 +5,7 @@ import { Provider } from 'react-redux';
 import { PrimeReactProvider } from 'primereact/api';
 import { makeStore, type AppStore } from '@/store';
 import { ThemeProvider } from './ThemeProvider';
+import { RealtimeProvider } from './RealtimeProvider';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -25,6 +26,7 @@ export function AppProviders({ children }: AppProvidersProps) {
     <Provider store={storeRef.current}>
       <PrimeReactProvider value={{ ripple: true }}>
         <ThemeProvider>
+          <RealtimeProvider />
           {children}
         </ThemeProvider>
       </PrimeReactProvider>

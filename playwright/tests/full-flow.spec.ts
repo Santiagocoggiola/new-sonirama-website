@@ -310,8 +310,12 @@ test.describe.serial('Complete E2E Flow', () => {
 
     await auth.loginAsAdmin();
 
-    // Navigate to admin orders
-    await orderHelper.navigateToAdminOrders();
+    // Navigate to admin orders and apply filters
+    await orderHelper.clearAdminFilters();
+    await orderHelper.setAdminDateRange(new Date(Date.now() - 24 * 60 * 60 * 1000), new Date());
+    if (orderNumber) {
+      await orderHelper.searchAdminOrders(orderNumber);
+    }
 
     // Verify orders table is visible
     await expect(page.getByTestId('admin-orders-table')).toBeVisible();

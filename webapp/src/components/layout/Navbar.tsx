@@ -35,6 +35,15 @@ export function Navbar({
   const userMenuRef = useRef<Menu>(null);
 
   const userMenuItems = [
+    // Orders/history entry
+    {
+      label: isAdmin ? 'Órdenes (admin)' : 'Mis pedidos',
+      icon: 'pi pi-list',
+      command: () => router.push(isAdmin ? '/admin/orders' : '/orders'),
+    },
+    {
+      separator: true,
+    },
     {
       label: 'Mi perfil',
       icon: 'pi pi-user',

@@ -1,10 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from 'primereact/button';
 import { InputNumber } from 'primereact/inputnumber';
 import { useCart } from '@/hooks/useCart';
-import { formatPrice } from '@/lib/utils';
+import { formatPrice, buildAssetUrl } from '@/lib/utils';
+import { useGetProductByIdQuery } from '@/store/api/productsApi';
 import type { CartItemDto } from '@/types/cart';
 
 interface CartItemCardProps {
@@ -19,6 +21,8 @@ interface CartItemCardProps {
 export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) {
   const { updateQuantity, removeItem, isLoading } = useCart();
   const cardId = `${testId}-${item.productId}`;
+  const { data: product } = useGetProductByIdQuery(item.productId);
+  const primaryImage = product?.images?.find((img) => (img as { isPrimary?: boolean }).isPrimary) || product?.images?.[0];
 
   const handleQuantityChange = async (value: number | null) => {
     if (value && value > 0) {
@@ -39,10 +43,22 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
       {/* Product placeholder */}
       <Link href={`/products/${item.productId}`} className="flex-shrink-0">
         <div
-          className="relative border-round overflow-hidden product-image-placeholder flex align-items-center justify-content-center"
+          className="relative border-round overflow-hidden flex align-items-center justify-content-center"
           style={{ width: '100px', height: '100px' }}
         >
-          <i className="pi pi-box text-2xl" />
+          {primaryImage?.url ? (
+            <Image
+              src={buildAssetUrl(primaryImage.url)}
+              alt={product?.name ?? item.productName}
+              fill
+              className="object-cover"
+              sizes="100px"
+            />
+          ) : (
+            <div className="product-image-placeholder w-full h-full flex align-items-center justify-content-center">
+              <i className="pi pi-image text-2xl" />
+            </div>
+          )}
         </div>
       </Link>
 

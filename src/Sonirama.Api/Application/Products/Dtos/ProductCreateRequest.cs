@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+
 namespace Sonirama.Api.Application.Products.Dtos;
 
 // Request DTO for creating a new product.
@@ -10,4 +12,5 @@ public sealed class ProductCreateRequest
     public string Currency { get; set; } = "ARS";
     public string? Category { get; set; }
     public bool IsActive { get; set; } = true;
+    public IFormFileCollection? Images { get; set; }
 }

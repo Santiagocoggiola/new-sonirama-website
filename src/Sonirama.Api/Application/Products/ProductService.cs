@@ -55,6 +55,8 @@ public sealed class ProductService : IProductService
         };
 
         await _productRepo.AddAsync(product, ct);
+        await AddImagesAsync(product, request.Images, ct);
+
         return _mapper.Map<ProductDto>(product);
     }
 
@@ -72,6 +74,7 @@ public sealed class ProductService : IProductService
         product.UpdatedAtUtc = DateTime.UtcNow;
 
         await _productRepo.UpdateAsync(product, ct);
+        await AddImagesAsync(product, request.Images, ct);
         return _mapper.Map<ProductDto>(product);
     }
 
@@ -121,11 +124,31 @@ public sealed class ProductService : IProductService
     public async Task<IReadOnlyList<ProductImageDto>> UploadImagesAsync(Guid productId, IEnumerable<IFormFile> files, CancellationToken ct)
     {
         var product = await _productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException(NotFoundMessage);
+        var added = await AddImagesAsync(product, files, ct);
+        return added.Select(_mapper.Map<ProductImageDto>).ToList();
+    }
+
+    public async Task DeleteImageAsync(Guid productId, Guid imageId, CancellationToken ct)
+    {
+        var product = await _productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException(NotFoundMessage);
+        var image = await _imageRepo.GetByIdAsync(imageId, ct) ?? throw new NotFoundException(ImageNotFoundMessage);
+
+        if (image.ProductId != product.Id)
+        {
+            throw new NotFoundException(ImageNotFoundMessage);
+        }
+
+        await _imageStorage.DeleteAsync(image, ct);
+        await _imageRepo.RemoveAsync(image, ct);
+    }
+
+    private async Task<IReadOnlyList<ProductImage>> AddImagesAsync(Product product, IEnumerable<IFormFile>? files, CancellationToken ct)
+    {
         var fileList = files?.Where(f => f is not null).ToList() ?? new List<IFormFile>();
 
         if (fileList.Count == 0)
         {
-            throw new ValidationException("Debes adjuntar al menos una imagen.");
+            return Array.Empty<ProductImage>();
         }
 
         if (fileList.Count > MaxImagesPerUpload)
@@ -143,20 +166,17 @@ public sealed class ProductService : IProductService
         }
 
         await _imageRepo.AddRangeAsync(storedImages, ct);
-        return storedImages.Select(_mapper.Map<ProductImageDto>).ToList();
-    }
 
-    public async Task DeleteImageAsync(Guid productId, Guid imageId, CancellationToken ct)
-    {
-        var product = await _productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException(NotFoundMessage);
-        var image = await _imageRepo.GetByIdAsync(imageId, ct) ?? throw new NotFoundException(ImageNotFoundMessage);
-
-        if (image.ProductId != product.Id)
+        if (product.Images == null)
         {
-            throw new NotFoundException(ImageNotFoundMessage);
+            product.Images = new List<ProductImage>();
         }
 
-        await _imageStorage.DeleteAsync(image, ct);
-        await _imageRepo.RemoveAsync(image, ct);
+        foreach (var stored in storedImages)
+        {
+            product.Images.Add(stored);
+        }
+
+        return storedImages;
     }
 }

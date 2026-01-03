@@ -15,6 +15,7 @@ public interface ICategoryRepository
     Task AddAsync(Category category, IEnumerable<Guid> parentIds, CancellationToken ct);
     Task UpdateAsync(Category category, IEnumerable<Guid> parentIds, CancellationToken ct);
     Task DeleteAsync(Category category, CancellationToken ct); // soft delete
+    Task PurgeAsync(Category category, CancellationToken ct); // hard delete
 
     // Hierarchy helpers
     Task<IReadOnlyList<Guid>> GetDescendantIdsAsync(Guid categoryId, CancellationToken ct);

@@ -42,7 +42,7 @@ export function ProfileView({ testId = 'profile-view' }: ProfileViewProps) {
     defaultValues: {
       firstName: user?.firstName ?? '',
       lastName: user?.lastName ?? '',
-      phone: user?.phoneNumber ?? '',
+      phoneNumber: user?.phoneNumber ?? '',
     },
   });
 
@@ -63,7 +63,11 @@ export function ProfileView({ testId = 'profile-view' }: ProfileViewProps) {
 
   const onProfileSubmit = async (data: UpdateProfileFormData) => {
     try {
-      await updateProfile(data).unwrap();
+      await updateProfile({
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        phoneNumber: data.phoneNumber?.trim() || null,
+      }).unwrap();
       showToast({
         severity: 'success',
         summary: 'Perfil actualizado',
@@ -115,7 +119,7 @@ export function ProfileView({ testId = 'profile-view' }: ProfileViewProps) {
     resetProfile({
       firstName: user?.firstName ?? '',
       lastName: user?.lastName ?? '',
-      phone: user?.phoneNumber ?? '',
+      phoneNumber: user?.phoneNumber ?? '',
     });
   };
 
@@ -204,7 +208,7 @@ export function ProfileView({ testId = 'profile-view' }: ProfileViewProps) {
                   Teléfono
                 </label>
                 <Controller
-                  name="phone"
+                  name="phoneNumber"
                   control={profileControl}
                   render={({ field }) => (
                     <InputText
@@ -212,12 +216,12 @@ export function ProfileView({ testId = 'profile-view' }: ProfileViewProps) {
                       id={`${testId}-phone`}
                       data-testid={`${testId}-phone`}
                       value={field.value ?? ''}
-                      className={`w-full ${profileErrors.phone ? 'p-invalid' : ''}`}
+                      className={`w-full ${profileErrors.phoneNumber ? 'p-invalid' : ''}`}
                     />
                   )}
                 />
-                {profileErrors.phone && (
-                  <small className="p-error">{profileErrors.phone.message}</small>
+                {profileErrors.phoneNumber && (
+                  <small className="p-error">{profileErrors.phoneNumber.message}</small>
                 )}
               </div>
 

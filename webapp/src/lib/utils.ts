@@ -4,11 +4,34 @@
 
 import { type ClassValue, clsx } from 'clsx';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://localhost:5001/api';
+const API_ORIGIN = (() => {
+  try {
+    const parsed = new URL(API_URL);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch {
+    return '';
+  }
+})();
+
+export const isLocalAssetHost = API_ORIGIN.includes('localhost') || API_ORIGIN.includes('127.0.0.1') || API_ORIGIN.includes('::1');
+
 /**
  * Combine class names conditionally (simplified version without tailwind-merge)
  */
 export function cn(...inputs: ClassValue[]): string {
   return clsx(inputs);
+}
+
+/**
+ * Build an absolute URL for assets returned by the API (e.g., /images/products/...).
+ */
+export function buildAssetUrl(path: string | undefined | null): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+
+  const trimmed = path.startsWith('/') ? path : `/${path}`;
+  return API_ORIGIN ? `${API_ORIGIN}${trimmed}` : trimmed;
 }
 
 /**

@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createSelector } from '@reduxjs/toolkit';
 import type { NotificationDto } from '@/types';
 
 interface NotificationsState {
@@ -95,8 +95,9 @@ export const selectNotificationsLoading = (state: {
 export const selectNotificationsError = (state: {
   notifications: NotificationsState;
 }) => state.notifications.error;
-export const selectUnreadNotifications = (state: {
-  notifications: NotificationsState;
-}) => state.notifications.items.filter((n) => !n.isRead);
+export const selectUnreadNotifications = createSelector(
+  (state: { notifications: NotificationsState }) => state.notifications.items,
+  (items) => items.filter((n) => !n.isRead)
+);
 
 export default notificationsSlice.reducer;

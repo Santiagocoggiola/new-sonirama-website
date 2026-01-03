@@ -1,7 +1,9 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Sonirama.Api.Application.Auth;
@@ -17,6 +19,7 @@ using Sonirama.Api.Application.Users;
 using Sonirama.Api.Application.Products;
 using Sonirama.Api.Application.Products.Discounts;
 using Sonirama.Api.Application.Categories;
+using Sonirama.Api.Application.Common.Options;
 using Sonirama.Api.Application.Carts;
 using AutoMapper;
 using Sonirama.Api.Infrastructure.Middleware;
@@ -57,7 +60,12 @@ builder.Services.AddOpenApi(options =>
         return Task.CompletedTask;
     });
 });
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Serialize enums as strings to keep API contracts readable for the frontend
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 builder.Services.AddSignalR();
 
 // FluentValidation - Auto register all validators from assembly
@@ -76,55 +84,58 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Rate Limiting
-builder.Services.AddRateLimiter(options =>
+// Rate Limiting (desactivado en Development para evitar 429 al testear)
+if (!builder.Environment.IsDevelopment())
 {
-    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    
-    // Política global: 100 requests por minuto por IP
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 100,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-    
-    // Política "auth": 5 requests por minuto (para login)
-    options.AddPolicy("auth", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 5,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-    
-    // Política "password-reset": 3 requests por minuto (prevenir enumeración de emails)
-    options.AddPolicy("password-reset", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 3,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-    
-    // Política "contact": 3 requests por minuto (prevenir spam de formulario)
-    options.AddPolicy("contact", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 3,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-});
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        
+        // Política global: 100 requests por minuto por IP
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 100,
+                    Window = TimeSpan.FromMinutes(1)
+                }));
+        
+        // Política "auth": 5 requests por minuto (para login)
+        options.AddPolicy("auth", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 5,
+                    Window = TimeSpan.FromMinutes(1)
+                }));
+        
+        // Política "password-reset": 3 requests por minuto (prevenir enumeración de emails)
+        options.AddPolicy("password-reset", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 3,
+                    Window = TimeSpan.FromMinutes(1)
+                }));
+        
+        // Política "contact": 3 requests por minuto (prevenir spam de formulario)
+        options.AddPolicy("contact", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 3,
+                    Window = TimeSpan.FromMinutes(1)
+                }));
+    });
+}
 
 builder.Services.AddAutoMapper(
     typeof(Sonirama.Api.Application.Users.Mapping.UserProfile),
@@ -148,6 +159,7 @@ builder.Services.AddHealthChecks()
 builder.Services.Configure<JwtOptions>(configuration.GetSection("Jwt"));
 builder.Services.Configure<AdminSeedOptions>(configuration.GetSection("AdminSeed"));
 builder.Services.Configure<SmtpOptions>(configuration.GetSection("Smtp"));
+builder.Services.Configure<AppOptions>(configuration.GetSection("App"));
 
 // Identity util: Password hasher
 builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
@@ -168,18 +180,26 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DataSeeder>();
 
-// Email: usar Console en desarrollo o cuando UseConsole=true, SMTP en producción
+// Email + password generator
 var smtpOptions = configuration.GetSection("Smtp").Get<SmtpOptions>();
-if (smtpOptions?.UseConsole == true || builder.Environment.IsDevelopment())
+if (builder.Environment.IsDevelopment())
 {
+    // Dev: deterministic generator + dev email logger (no SMTP)
+    builder.Services.AddScoped<IEmailSender, DevEmailSender>();
+    builder.Services.AddScoped<IPasswordGenerator, DevPasswordGenerator>();
+}
+else if (smtpOptions?.UseConsole == true)
+{
+    // Non-prod but console flag: log emails, keep secure generator
     builder.Services.AddScoped<IEmailSender, ConsoleEmailSender>();
+    builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
 }
 else
 {
+    // Prod: real SMTP + secure generator
     builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+    builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
 }
-
-builder.Services.AddScoped<IPasswordGenerator, PasswordGenerator>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IBulkDiscountService, BulkDiscountService>();
@@ -222,24 +242,52 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = audience,
         IssuerSigningKey = signingKey
     };
+
+    // Permitir JWT vía querystring para WebSockets/SSE en SignalR
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/orders"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Migraciones + Seed DB/Admin (tolerante a errores si DB no disponible)
-try
+// Migraciones + Seed DB/Admin (con reintentos por si la base tarda en levantar)
+var maxAttempts = 5;
+var delay = TimeSpan.FromSeconds(3);
+for (var attempt = 1; attempt <= maxAttempts; attempt++)
 {
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
-    var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
-    await seeder.InitializeAsync();
-}
-catch (Exception ex)
-{
-    Log.Warning(ex, "No se pudo inicializar datos de la base de datos");
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await db.Database.MigrateAsync();
+        var seeder = scope.ServiceProvider.GetRequiredService<DataSeeder>();
+        await seeder.InitializeAsync();
+        break; // listo
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "No se pudo inicializar datos de la base de datos (intento {Attempt}/{MaxAttempts})", attempt, maxAttempts);
+        if (attempt == maxAttempts)
+        {
+            break;
+        }
+        await Task.Delay(delay);
+    }
 }
 
 // Pipeline
@@ -255,13 +303,26 @@ app.UseSerilogRequestLogging(options =>
 });
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+
+// Serve static files (product images) with WebP content type support
+var contentTypeProvider = new FileExtensionContentTypeProvider();
+if (!contentTypeProvider.Mappings.ContainsKey(".webp"))
+{
+    contentTypeProvider.Mappings.Add(".webp", "image/webp");
+}
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = contentTypeProvider
+});
 
 // CORS debe ir antes de Authentication
 app.UseCors("AllowFrontend");
 
-// Rate Limiting
-app.UseRateLimiter();
+// Rate Limiting (solo fuera de Development)
+if (!app.Environment.IsDevelopment())
+{
+    app.UseRateLimiter();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();

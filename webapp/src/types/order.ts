@@ -16,6 +16,8 @@ export interface OrderItemDto {
   productId: string;
   productCode: string;
   productName: string;
+  productImageUrl?: string | null;
+  productImageAlt?: string | null;
   quantity: number;
   unitPrice: number;
   discountPercent: number;
@@ -111,7 +113,7 @@ export interface OrderCompleteRequest {
 
 export interface OrderModifyItemRequest {
   productId: string;
-  quantity: number;
+  newQuantity: number;
 }
 
 export interface OrderModifyRequest {

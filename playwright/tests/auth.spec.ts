@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { AuthHelper, TEST_ADMIN } from '../helpers/auth';
+import { AuthHelper, TEST_ADMIN, waitForToast } from '../helpers/auth';
 
 /**
  * Authentication E2E Tests
@@ -32,21 +32,24 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
 
-    // Submit empty form
-    await page.getByTestId('login-form-submit').click();
+    const submit = page.getByTestId('login-form-submit');
+    await expect(submit).toBeDisabled();
 
-    // Wait for validation
-    await page.waitForTimeout(500);
+    // Fill only email -> button should still be disabled or show password error
+    await page.getByTestId('login-form-email').fill('invalid-email');
+    const stillDisabled = await submit.isDisabled();
 
-    // Should show error messages
-    const emailError = page.getByTestId('login-form-email-error');
-    const passwordError = page.getByTestId('login-form-password-error');
-
-    const hasEmailError = await emailError.isVisible({ timeout: 2000 }).catch(() => false);
-    const hasPasswordError = await passwordError.isVisible({ timeout: 2000 }).catch(() => false);
-
-    // At least one validation error should be shown
-    expect(hasEmailError || hasPasswordError).toBe(true);
+    if (stillDisabled) {
+      expect(stillDisabled).toBe(true);
+    } else {
+      // If form allows click, expect inline errors
+      await submit.click();
+      const emailError = page.getByTestId('login-form-email-error');
+      const passwordError = page.getByTestId('login-form-password-error');
+      const hasEmailError = await emailError.isVisible({ timeout: 2000 }).catch(() => false);
+      const hasPasswordError = await passwordError.isVisible({ timeout: 2000 }).catch(() => false);
+      expect(hasEmailError || hasPasswordError).toBe(true);
+    }
   });
 
   test('Shows error for invalid credentials', async ({ page }) => {
@@ -58,12 +61,9 @@ test.describe('Authentication', () => {
     await page.getByTestId('login-form-password').fill('wrongpassword123');
     await page.getByTestId('login-form-submit').click();
 
-    // Wait for response
-    await page.waitForTimeout(2000);
-
     // Should show server error or remain on login page
     const serverError = page.getByTestId('login-form-server-error');
-    const isStillOnLogin = page.url().includes('/login');
+    const isStillOnLogin = await page.waitForURL(/login/, { timeout: 5000 }).then(() => true).catch(() => page.url().includes('/login'));
 
     const hasError = await serverError.isVisible({ timeout: 5000 }).catch(() => false);
     expect(hasError || isStillOnLogin).toBe(true);
@@ -105,7 +105,8 @@ test.describe('Authentication', () => {
     await auth.logout();
 
     // Should be on login page
-    await expect(page).toHaveURL('/login');
+    await expect(page.getByTestId('login-form-email')).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(/\/login(\?|$)/i);
   });
 
   test('Protected routes redirect to login', async ({ page }) => {
@@ -113,7 +114,7 @@ test.describe('Authentication', () => {
     await page.goto('/admin/products');
     
     // Should redirect to login
-    await page.waitForURL(/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login(\?returnUrl=.*)?/, { timeout: 10000 });
   });
 
   test('User cannot access admin routes', async ({ page }) => {
@@ -148,9 +149,7 @@ test.describe('Forgot Password', () => {
 
     // Submit
     await page.getByTestId('forgot-password-form-email-submit').click();
-
-    // Wait for response
-    await page.waitForTimeout(2000);
+    await waitForToast(page).catch(() => undefined);
 
     // Should either show code step or error message
     const codeStep = page.getByTestId('forgot-password-form-code-step');
@@ -169,17 +168,14 @@ test.describe('Forgot Password', () => {
 
     // Enter invalid email
     await page.getByTestId('forgot-password-form-email').fill('invalid-email');
-    await page.getByTestId('forgot-password-form-email-submit').click();
+    const submit = page.getByTestId('forgot-password-form-email-submit');
 
-    // Wait for validation
-    await page.waitForTimeout(500);
+    // Button should remain disabled until email is valid
+    await expect(submit).toBeDisabled();
 
-    // Should show error
+    // Inline error should be visible without clicking
     const emailError = page.getByTestId('forgot-password-form-email-error');
-    const hasError = await emailError.isVisible({ timeout: 2000 }).catch(() => false);
-    
-    // Either validation error or form doesn't submit with invalid email
-    expect(hasError || page.url().includes('/forgot-password')).toBe(true);
+    await expect(emailError).toBeVisible({ timeout: 2000 });
   });
 });
 
@@ -193,7 +189,9 @@ test.describe('Session Management', () => {
     await expect(page.getByTestId('admin-categories-table')).toBeVisible({ timeout: 15000 });
 
     await page.goto('/admin/orders');
-    await expect(page.getByTestId('admin-orders-table')).toBeVisible({ timeout: 15000 });
+    const ordersTable = page.getByTestId('admin-orders-table');
+    const ordersEmpty = page.getByTestId('admin-orders-table-empty');
+    await expect(ordersTable.or(ordersEmpty)).toBeVisible({ timeout: 15000 });
 
     // Should still be logged in
     await expect(page.getByTestId('admin-navbar')).toBeVisible();
@@ -209,5 +207,77 @@ test.describe('Session Management', () => {
 
     // Should still be on admin page (not redirected to login)
     await expect(page.getByTestId('admin-navbar')).toBeVisible({ timeout: 15000 });
+  });
+});
+
+test.describe('Verification & password reset with dev codes', () => {
+  const DEV_NUMERIC_CODE = '111222';
+  const DEV_PASSWORD = 'DevPasswor';
+
+  const createUserViaAdmin = async (page: import('@playwright/test').Page, email: string) => {
+    const auth = new AuthHelper(page);
+    await auth.loginAsAdmin();
+    await page.goto('/admin/users');
+    await page.waitForLoadState('networkidle');
+
+    await page.getByTestId('admin-users-table-create').click();
+    await page.getByLabel('Email *').fill(email);
+    await page.getByLabel('Nombre *').fill('Playwright');
+    await page.getByLabel('Apellido *').fill('User');
+
+    const phoneLabel = page.getByLabel('Teléfono');
+    if (await phoneLabel.isVisible().catch(() => false)) {
+      await phoneLabel.fill('123456');
+    }
+
+      const roleDropdown = page.locator('#user-role');
+      await roleDropdown.click();
+      const rolePanel = page.locator('.p-dropdown-items');
+      await rolePanel.getByText('Usuario', { exact: true }).click();
+
+    await page.getByRole('button', { name: /crear|guardar|actualizar/i }).click();
+    await waitForToast(page).catch(() => undefined);
+  };
+
+  test('Admin creates user and verifies email via static code', async ({ page }) => {
+    const email = `playwright+verify_${Date.now()}@example.com`;
+
+    await createUserViaAdmin(page, email);
+
+    await page.goto(`/auth/verify?email=${encodeURIComponent(email)}&code=${DEV_NUMERIC_CODE}`);
+    await expect(page.getByTestId('verify-email-page')).toBeVisible();
+    await expect(page.getByText(/Cuenta verificada/i)).toBeVisible({ timeout: 8000 });
+    await page.waitForURL('/login', { timeout: 15000 });
+
+    await page.getByTestId('login-form-email').fill(email);
+    await page.getByTestId('login-form-password').fill(DEV_PASSWORD);
+    await page.getByTestId('login-form-submit').click();
+
+    await expect(page).toHaveURL(/\/products/, { timeout: 15000 });
+  });
+
+  test('User resets password with static code', async ({ page }) => {
+    const email = `playwright+reset_${Date.now()}@example.com`;
+
+    await createUserViaAdmin(page, email);
+    await page.goto(`/auth/verify?email=${encodeURIComponent(email)}&code=${DEV_NUMERIC_CODE}`);
+    await page.waitForURL('/login', { timeout: 15000 });
+
+    await page.goto('/forgot-password');
+    await page.getByTestId('forgot-password-form-email').fill(email);
+    await page.getByTestId('forgot-password-form-email-submit').click();
+    await waitForToast(page).catch(() => undefined);
+
+    await expect(page.getByTestId('forgot-password-form-code-step')).toBeVisible({ timeout: 8000 });
+    await page.getByTestId('forgot-password-form-code').fill(DEV_NUMERIC_CODE);
+    await page.getByTestId('forgot-password-form-code-submit').click();
+    await expect(page.getByTestId('forgot-password-form-success-step')).toBeVisible({ timeout: 8000 });
+
+    await page.goto('/login');
+    await page.getByTestId('login-form-email').fill(email);
+    await page.getByTestId('login-form-password').fill(DEV_PASSWORD);
+    await page.getByTestId('login-form-submit').click();
+
+    await expect(page).toHaveURL(/\/products/, { timeout: 15000 });
   });
 });

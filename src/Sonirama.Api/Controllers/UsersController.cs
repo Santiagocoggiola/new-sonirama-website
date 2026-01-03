@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 using Sonirama.Api.Application.Users;
 using Sonirama.Api.Application.Users.Dtos;
 
@@ -11,6 +12,55 @@ namespace Sonirama.Api.Controllers;
 [Route("api/users")] // endpoint-base plural lower-case
 public sealed class UsersController(IUserService service) : ControllerBase
 {
+    [Authorize(Roles = "ADMIN,USER")]
+    [HttpGet("me")]
+    public async Task<ActionResult> GetMe(CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var dto = await service.GetCurrentAsync(userId.Value, ct);
+        return Ok(dto);
+    }
+
+    [Authorize(Roles = "ADMIN,USER")]
+    [HttpPut("me")]
+    public async Task<ActionResult> UpdateMe([FromBody] UserProfileUpdateRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        var dto = await service.UpdateProfileAsync(userId.Value, request, ct);
+        return Ok(dto);
+    }
+
+    [Authorize(Roles = "ADMIN,USER")]
+    [HttpPut("me/password")]
+    public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken ct)
+    {
+        var userId = GetCurrentUserId();
+        if (userId is null) return Unauthorized();
+
+        await service.ChangePasswordAsync(userId.Value, request, ct);
+        return Ok();
+    }
+
+    [AllowAnonymous]
+    [HttpPost("verify/start")]
+    public async Task<ActionResult> StartEmailVerification([FromQuery] string email, CancellationToken ct)
+    {
+        await service.StartEmailVerificationAsync(email, ct);
+        return Ok();
+    }
+
+    [AllowAnonymous]
+    [HttpPost("verify/confirm")]
+    public async Task<ActionResult> ConfirmEmailVerification([FromQuery] string email, [FromQuery] string code, CancellationToken ct)
+    {
+        await service.ConfirmEmailVerificationAsync(email, code, ct);
+        return Ok();
+    }
+
     [Authorize(Roles = "ADMIN,USER")]
     [HttpGet]
     public async Task<ActionResult> List([FromQuery] UserFilterRequest filter, CancellationToken ct)
@@ -76,5 +126,13 @@ public sealed class UsersController(IUserService service) : ControllerBase
     {
         await service.ForcePasswordResetAsync(id, ct);
         return Ok();
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var userIdClaim = User.Claims
+            .FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier || c.Type == "sub")?.Value;
+
+        return Guid.TryParse(userIdClaim, out var userId) ? userId : null;
     }
 }

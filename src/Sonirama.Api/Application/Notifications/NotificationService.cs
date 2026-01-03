@@ -134,21 +134,34 @@ public sealed class NotificationService(
 
         await notificationRepository.AddRangeAsync(notifications, ct);
 
-        // Send to admin group via SignalR
-        var dto = new NotificationDto
+        // Send per-admin notification + unread count to keep badge accurate
+        foreach (var notification in notifications)
         {
-            Id = Guid.Empty, // Generic for broadcast
-            Type = type,
-            Title = title,
-            Body = body,
-            ReferenceId = referenceId,
-            IsRead = false,
-            CreatedAtUtc = DateTime.UtcNow
-        };
+            var dto = MapToDto(notification);
 
+            await hubContext.Clients
+                .Group(OrdersHub.BuildUserGroup(notification.UserId))
+                .SendAsync(NewNotificationEvent, dto, ct);
+
+            var unread = await notificationRepository.GetUnreadCountAsync(notification.UserId, ct);
+            await hubContext.Clients
+                .Group(OrdersHub.BuildUserGroup(notification.UserId))
+                .SendAsync(UnreadCountChangedEvent, new { count = unread }, ct);
+        }
+
+        // Also broadcast to the shared admin group so online admins see it immediately
         await hubContext.Clients
             .Group(OrdersHub.AdminGroup)
-            .SendAsync(NewNotificationEvent, dto, ct);
+            .SendAsync(NewNotificationEvent, new NotificationDto
+            {
+                Id = Guid.Empty,
+                Type = type,
+                Title = title,
+                Body = body,
+                ReferenceId = referenceId,
+                IsRead = false,
+                CreatedAtUtc = DateTime.UtcNow
+            }, ct);
     }
 
     private static NotificationDto MapToDto(Notification n) => new()

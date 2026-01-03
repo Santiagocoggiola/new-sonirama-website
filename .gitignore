@@ -186,3 +186,18 @@ bld/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+
+# API static images
+src/Sonirama.Api/wwwroot/images/*
+
+# Playwright artifacts
+playwright-report/
+test-results/
+playwright/test-results/
+playwright/.cache/
+playwright/.auth/
+
+# Script outputs
+scripts/**/results/
+scripts/**/reports/
+scripts/**/logs/

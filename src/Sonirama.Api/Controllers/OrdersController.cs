@@ -22,6 +22,18 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
         return Ok(result);
     }
 
+    [HttpGet("my")]
+    public async Task<ActionResult<PagedResult<OrderSummaryDto>>> ListMineAsync([FromQuery] OrderListRequest request, CancellationToken ct)
+    {
+        var userId = User.GetUserId();
+        if (userId is null) return Unauthorized();
+
+        // Force the current user and non-admin path so regular buyers can ver sus órdenes
+        request.UserId = userId.Value;
+        var result = await orderService.ListAsync(request, userId.Value, requesterIsAdmin: false, ct);
+        return Ok(result);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<OrderDto>> GetByIdAsync(Guid id, CancellationToken ct)
     {

@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import path from 'path';
+import { waitForLoadingToFinish, waitForToast } from './auth';
 
 /**
  * Product test data
@@ -51,13 +52,14 @@ export class ProductHelper {
     
     // Price input - need to clear first
     const priceInput = this.page.getByTestId('product-editor-price').locator('input');
-    await priceInput.click();
+    await expect(priceInput).toBeVisible({ timeout: 15000 });
+    await priceInput.click({ clickCount: 3 });
     await priceInput.fill(product.price.toString());
 
     // Select category if provided
     if (product.categoryId) {
       await this.page.getByTestId('product-editor-category').click();
-      await this.page.waitForTimeout(300); // Wait for dropdown animation
+      await waitForLoadingToFinish(this.page);
       await this.page.locator('.p-dropdown-item').filter({ hasText: product.category || '' }).click();
     }
 
@@ -70,6 +72,8 @@ export class ProductHelper {
 
     // Submit form
     await this.page.getByTestId('product-editor-submit').click();
+
+    await waitForToast(this.page).catch(() => undefined);
 
     // Wait for navigation back to products list
     await expect(this.page).toHaveURL('/admin/products', { timeout: 15000 });
@@ -110,6 +114,7 @@ export class ProductHelper {
 
     if (updates.price !== undefined) {
       const priceInput = this.page.getByTestId('product-editor-price').locator('input');
+      await expect(priceInput).toBeVisible({ timeout: 15000 });
       await priceInput.click({ clickCount: 3 }); // Select all
       await priceInput.fill(updates.price.toString());
     }
@@ -124,8 +129,7 @@ export class ProductHelper {
 
     // Submit
     await this.page.getByTestId('product-editor-submit').click();
-
-    // Wait for navigation
+    await waitForToast(this.page).catch(() => undefined);
     await expect(this.page).toHaveURL('/admin/products', { timeout: 15000 });
   }
 
@@ -144,10 +148,11 @@ export class ProductHelper {
       // Confirm deletion
       const confirmDialog = this.page.locator('.p-confirmdialog, .p-dialog');
       if (await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await confirmDialog.getByRole('button', { name: /confirmar|sí|yes|delete/i }).click();
+        await confirmDialog
+          .getByRole('button', { name: /aceptar|confirmar|sí|yes|delete|eliminar|ok/i })
+          .click();
       }
-
-      await this.page.waitForTimeout(500);
+      await waitForToast(this.page).catch(() => undefined);
     }
   }
 
@@ -158,7 +163,7 @@ export class ProductHelper {
     const searchInput = this.page.getByTestId('admin-products-table-search');
     await searchInput.clear();
     await searchInput.fill(query);
-    await this.page.waitForTimeout(500); // Debounce
+    await waitForLoadingToFinish(this.page);
   }
 
   /**
@@ -179,9 +184,7 @@ export class ProductHelper {
       );
       
       await fileInput.setInputFiles(absolutePaths);
-      
-      // Wait for upload to complete
-      await this.page.waitForTimeout(3000);
+      await waitForToast(this.page).catch(() => undefined);
     }
   }
 
