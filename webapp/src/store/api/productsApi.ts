@@ -177,6 +177,7 @@ export const productsApi = baseApi.injectEndpoints({
 
 export const {
   useGetProductsQuery,
+  useLazyGetProductsQuery,
   useGetProductByIdQuery,
   useGetProductByCodeQuery,
   useLazyGetProductByIdQuery,

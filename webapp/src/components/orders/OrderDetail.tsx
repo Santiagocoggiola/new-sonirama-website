@@ -356,10 +356,13 @@ function OrderItemRow({
   testId: string;
 }) {
   const fallbackImage = item.product?.images?.find((img) => img.isPrimary) || item.product?.images?.[0];
-  const imageUrl = item.productImageUrl
-    ? buildAssetUrl(item.productImageUrl)
-    : fallbackImage?.url
-      ? buildAssetUrl(fallbackImage.url)
+  const normalizedItemImage = item.productImageUrl?.replace(/\\/g, '/');
+  const normalizedFallback = fallbackImage?.url?.replace(/\\/g, '/');
+
+  const imageUrl = normalizedItemImage
+    ? buildAssetUrl(normalizedItemImage)
+    : normalizedFallback
+      ? buildAssetUrl(normalizedFallback)
       : null;
   const imageAlt = item.productImageAlt || fallbackImage?.altText || item.productName;
 

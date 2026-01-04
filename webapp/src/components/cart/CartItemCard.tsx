@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Button } from 'primereact/button';
 import { InputNumber } from 'primereact/inputnumber';
 import { useCart } from '@/hooks/useCart';
@@ -43,16 +42,14 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
       {/* Product placeholder */}
       <Link href={`/products/${item.productId}`} className="flex-shrink-0">
         <div
-          className="relative border-round overflow-hidden flex align-items-center justify-content-center"
+          className="border-round overflow-hidden flex align-items-center justify-content-center"
           style={{ width: '100px', height: '100px' }}
         >
           {primaryImage?.url ? (
-            <Image
+            <img
               src={buildAssetUrl(primaryImage.url)}
               alt={product?.name ?? item.productName}
-              fill
-              className="object-cover"
-              sizes="100px"
+              className="w-full h-full object-cover"
             />
           ) : (
             <div className="product-image-placeholder w-full h-full flex align-items-center justify-content-center">
@@ -108,7 +105,7 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
         </div>
 
         {/* Quantity and actions */}
-        <div className="flex align-items-center justify-content-between mt-auto">
+        <div className="flex align-items-center gap-3 mt-auto">
           <InputNumber
             id={`${cardId}-quantity`}
             data-testid={`${cardId}-quantity`}
@@ -121,7 +118,7 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
             incrementButtonIcon="pi pi-plus"
             decrementButtonIcon="pi pi-minus"
             disabled={isLoading}
-            style={{ width: '8rem' }}
+            style={{ width: '7rem' }}
           />
 
           <Button

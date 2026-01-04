@@ -6,11 +6,14 @@ import { Button } from 'primereact/button';
 import { Badge } from 'primereact/badge';
 import { Menu } from 'primereact/menu';
 import { useRef } from 'react';
+import { OverlayPanel } from 'primereact/overlaypanel';
+import { Divider } from 'primereact/divider';
 import { Logo } from '@/components/ui/Logo';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { NotificationBell } from './NotificationBell';
 import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
+import { formatPrice } from '@/lib/utils';
 
 interface NavbarProps {
   /** Whether to show the sidebar toggle button (for admin) */
@@ -31,8 +34,9 @@ export function Navbar({
 }: NavbarProps) {
   const router = useRouter();
   const { user, logout, isAdmin, isInitialized } = useAuth();
-  const { itemCount } = useCart();
+  const { items, total, itemCount, checkout, isCheckingOut } = useCart();
   const userMenuRef = useRef<Menu>(null);
+  const cartOverlayRef = useRef<OverlayPanel>(null);
 
   const userMenuItems = [
     // Orders/history entry
@@ -98,7 +102,7 @@ export function Navbar({
           <div className="flex align-items-center gap-2">
             {/* Cart button (not for admin) */}
             {!isAdmin && (
-              <Link href="/cart" className="no-underline">
+              <>
                 <Button
                   id={`${testId}-cart`}
                   data-testid={`${testId}-cart`}
@@ -108,6 +112,7 @@ export function Navbar({
                   severity="secondary"
                   aria-label="Carrito"
                   className="p-overlay-badge"
+                  onClick={(e) => cartOverlayRef.current?.toggle(e)}
                 >
                   {itemCount > 0 && (
                     <Badge
@@ -117,7 +122,76 @@ export function Navbar({
                     />
                   )}
                 </Button>
-              </Link>
+
+                <OverlayPanel
+                  ref={cartOverlayRef}
+                  id={`${testId}-cart-panel`}
+                  data-testid={`${testId}-cart-panel`}
+                  className="w-20rem"
+                  dismissable
+                >
+                  <div className="flex align-items-center justify-content-between mb-2">
+                    <h4 className="m-0 font-semibold">Carrito</h4>
+                    {itemCount > 0 && (
+                      <span className="text-sm text-color-secondary">{itemCount} item(s)</span>
+                    )}
+                  </div>
+                  <Divider className="my-2" />
+                  {items.length === 0 ? (
+                    <p className="m-0 text-color-secondary">Tu carrito está vacío.</p>
+                  ) : (
+                    <div className="flex flex-column gap-2" style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                      {items.slice(0, 5).map((item) => (
+                        <div key={item.productId} className="flex justify-content-between align-items-center">
+                          <div className="flex flex-column">
+                            <span className="font-medium line-clamp-1">{item.productName}</span>
+                            <span className="text-sm text-color-secondary">{item.quantity} × {item.unitPriceBase ? formatPrice(item.unitPriceBase) : ''}</span>
+                          </div>
+                          <span className="font-semibold">{formatPrice(item.lineTotal)}</span>
+                        </div>
+                      ))}
+                      {items.length > 5 && (
+                        <span className="text-sm text-color-secondary">… y {items.length - 5} más</span>
+                      )}
+                    </div>
+                  )}
+                  <Divider className="my-2" />
+                  <div className="flex justify-content-between mb-2">
+                    <span className="font-semibold">Total</span>
+                    <span className="font-semibold text-primary">{formatPrice(total)}</span>
+                  </div>
+                  <div className="flex flex-column gap-2">
+                    <Button
+                      id={`${testId}-cart-quick-checkout`}
+                      data-testid={`${testId}-cart-quick-checkout`}
+                      label="Confirmar compra"
+                      icon="pi pi-check"
+                      className="w-full"
+                      disabled={items.length === 0}
+                      loading={isCheckingOut}
+                      onClick={async () => {
+                        const result = await checkout();
+                        if (result.success && result.order) {
+                          cartOverlayRef.current?.hide();
+                          router.push(`/orders/${result.order.id}`);
+                        }
+                      }}
+                    />
+                    <Button
+                      id={`${testId}-cart-go`}
+                      data-testid={`${testId}-cart-go`}
+                      label="Ver carrito"
+                      icon="pi pi-arrow-right"
+                      className="w-full"
+                      outlined
+                      onClick={() => {
+                        cartOverlayRef.current?.hide();
+                        router.push('/cart');
+                      }}
+                    />
+                  </div>
+                </OverlayPanel>
+              </>
             )}
 
             {/* Notifications */}

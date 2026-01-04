@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Button } from 'primereact/button';
@@ -9,6 +9,7 @@ import { Tag } from 'primereact/tag';
 import { Galleria } from 'primereact/galleria';
 import { Skeleton } from 'primereact/skeleton';
 import { Divider } from 'primereact/divider';
+import { BreadCrumb } from 'primereact/breadcrumb';
 import { useGetProductByIdQuery } from '@/store/api/productsApi';
 import { useCart } from '@/hooks/useCart';
 import { buildAssetUrl, formatPrice, isLocalAssetHost } from '@/lib/utils';
@@ -140,6 +141,13 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
     ? product.images
     : [{ id: 'placeholder', url: '', altText: product.name, isPrimary: true, displayOrder: 0 }];
 
+  const breadcrumbItems = useMemo(() => {
+    const items = [] as { label: string }[];
+    if (product.category) items.push({ label: product.category });
+    items.push({ label: product.name });
+    return items;
+  }, [product]);
+
   return (
     <div id={testId} data-testid={testId}>
       {/* Back button */}
@@ -152,6 +160,13 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
         className="mb-4"
         onClick={handleGoBack}
       />
+
+      <div className="mb-3">
+        <BreadCrumb
+          home={{ icon: 'pi pi-home', url: '/products' }}
+          model={breadcrumbItems}
+        />
+      </div>
 
       <div className="grid">
         {/* Image gallery */}

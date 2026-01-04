@@ -25,7 +25,7 @@ const cartSlice = createSlice({
   reducers: {
     setCart: (state, action: PayloadAction<CartDto>) => {
       state.id = action.payload.id;
-      state.items = action.payload.items;
+      state.items = [...action.payload.items].sort((a, b) => (a.productCode || '').localeCompare(b.productCode || ''));
       state.total = action.payload.total;
       state.updatedAtUtc = action.payload.updatedAtUtc;
       state.error = null;

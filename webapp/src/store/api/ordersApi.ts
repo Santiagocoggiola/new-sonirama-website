@@ -30,7 +30,7 @@ export const ordersApi = baseApi.injectEndpoints({
             ]
           : [{ type: 'Orders', id: 'LIST' }],
     }),
-    getMyOrders: builder.query<PagedResult<OrderSummaryDto>, { pageNumber?: number; pageSize?: number } | void>({
+    getMyOrders: builder.query<PagedResult<OrderSummaryDto>, OrderListParams | void>({
       query: (params) => ({
         url: '/orders/my',
         params: params || {},

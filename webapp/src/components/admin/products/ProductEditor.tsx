@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Card } from 'primereact/card';
+import { BreadCrumb } from 'primereact/breadcrumb';
 import { InputText } from 'primereact/inputtext';
 import { InputTextarea } from 'primereact/inputtextarea';
 import { InputNumber } from 'primereact/inputnumber';
@@ -222,6 +223,17 @@ export function ProductEditor({ productId, testId = 'product-editor' }: ProductE
 
   return (
     <Card id={testId} data-testid={testId}>
+      {isEditing && product && (
+        <div className="mb-4">
+          <BreadCrumb
+            home={{ icon: 'pi pi-home', url: '/admin/products' }}
+            model={[
+              ...(product.category ? [{ label: product.category }] : []),
+              { label: product.name },
+            ]}
+          />
+        </div>
+      )}
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-column gap-4">
         {/* Code */}
         <div className="flex flex-column gap-2">
