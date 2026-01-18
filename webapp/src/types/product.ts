@@ -11,6 +11,11 @@ export interface ProductImageDto {
   uploadedAtUtc: string;
 }
 
+export interface ProductCategoryDto {
+  id: string;
+  name: string;
+}
+
 export interface BulkDiscountDto {
   id: string;
   productId: string;
@@ -29,6 +34,7 @@ export interface ProductDto {
   price: number;
   currency: string;
   category: string | null;
+  categories?: ProductCategoryDto[];
   minBulkQuantity: number | null;
   isActive: boolean;
   createdAtUtc: string;
@@ -44,6 +50,7 @@ export interface ProductCreateRequest {
   price: number;
   currency?: string;
   category?: string;
+  categoryIds?: string[];
   isActive?: boolean;
   images?: File[];
 }
@@ -54,6 +61,7 @@ export interface ProductUpdateRequest {
   price: number;
   currency?: string;
   category?: string;
+  categoryIds?: string[];
   isActive?: boolean;
   images?: File[];
 }

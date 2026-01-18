@@ -11,6 +11,7 @@ public sealed class ProductCreateRequest
     public decimal Price { get; set; }
     public string Currency { get; set; } = "ARS";
     public string? Category { get; set; }
+    public List<Guid>? CategoryIds { get; set; }
     public bool IsActive { get; set; } = true;
     public IFormFileCollection? Images { get; set; }
 }

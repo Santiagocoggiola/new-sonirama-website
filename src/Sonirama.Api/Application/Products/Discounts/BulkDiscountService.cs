@@ -1,4 +1,5 @@
 using AutoMapper;
+using Sonirama.Api.Application.Common.Dtos;
 using Sonirama.Api.Application.Common.Exceptions;
 using Sonirama.Api.Application.Common.Interfaces;
 using Sonirama.Api.Application.Products.Discounts.Dtos;
@@ -11,12 +12,18 @@ public sealed class BulkDiscountService(
     IBulkDiscountRepository discountRepo,
     IMapper mapper) : IBulkDiscountService
 {
-    public async Task<IReadOnlyList<BulkDiscountDto>> ListByProductAsync(Guid productId, CancellationToken ct)
+    public async Task<PagedResult<BulkDiscountDto>> ListByProductAsync(Guid productId, BulkDiscountListRequest request, CancellationToken ct)
     {
         // Ensure product exists
         _ = await productRepo.GetByIdAsync(productId, ct) ?? throw new NotFoundException("Producto no encontrado.");
-        var list = await discountRepo.GetByProductAsync(productId, ct);
-        return list.Select(mapper.Map<BulkDiscountDto>).ToList();
+        var page = await discountRepo.GetByProductPagedAsync(productId, request.Page, request.PageSize, ct);
+        return new PagedResult<BulkDiscountDto>
+        {
+            Page = page.Page,
+            PageSize = page.PageSize,
+            TotalCount = page.TotalCount,
+            Items = page.Items.Select(mapper.Map<BulkDiscountDto>).ToList()
+        };
     }
 
     public async Task<BulkDiscountDto> CreateAsync(Guid productId, BulkDiscountCreateRequest request, CancellationToken ct)

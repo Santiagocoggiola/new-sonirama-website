@@ -11,6 +11,7 @@ public sealed class Order
     public OrderStatus Status { get; set; } = OrderStatus.PendingApproval;
     public decimal Subtotal { get; set; }
     public decimal DiscountTotal { get; set; }
+    public decimal UserDiscountPercent { get; set; }
     public decimal Total { get; set; }
     public string Currency { get; set; } = "ARS";
     public string? UserNotes { get; set; }

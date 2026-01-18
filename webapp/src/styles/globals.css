@@ -24,6 +24,27 @@ body {
 }
 
 /* ===========================================
+   Navbar toolbar button states
+   =========================================== */
+
+.app-navbar .p-button.p-button-text.p-button-rounded {
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+.app-navbar .p-button.p-button-text.p-button-rounded:focus {
+  box-shadow: none;
+}
+
+.app-navbar .p-button.p-button-text.p-button-rounded:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 35%, transparent);
+}
+
+.app-navbar .p-button.p-button-text.p-button-rounded:active {
+  background-color: color-mix(in srgb, var(--primary-color) 12%, transparent);
+  transform: scale(0.98);
+}
+
+/* ===========================================
    Only essential fixes for PrimeReact
    =========================================== */
 

@@ -12,6 +12,7 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { Dialog } from 'primereact/dialog';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { InputText } from 'primereact/inputtext';
+import { InputNumber } from 'primereact/inputnumber';
 import { Dropdown } from 'primereact/dropdown';
 import { useGetUsersQuery, useCreateUserMutation, useUpdateUserMutation, useDeleteUserMutation } from '@/store/api/usersApi';
 import { userCreateSchema, type UserCreateFormValues } from '@/schemas/user.schema';
@@ -29,11 +30,14 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
   const [dialogVisible, setDialogVisible] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserDto | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const { data, isLoading, isError } = useGetUsersQuery({ pageSize: 50, query: searchQuery || undefined });
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState(10);
+  const { data, isLoading, isError } = useGetUsersQuery({ page, pageSize: rows, query: searchQuery || undefined });
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
   const [deleteUser, { isLoading: isDeleting }] = useDeleteUserMutation();
   const users = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
 
   const {
     control,
@@ -47,18 +51,19 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
       firstName: '',
       lastName: '',
       phoneNumber: '',
+      discountPercent: 0,
       role: 'USER',
     },
   });
 
   const openDialog = () => {
-    reset({ email: '', firstName: '', lastName: '', phoneNumber: '', role: 'USER' });
+    reset({ email: '', firstName: '', lastName: '', phoneNumber: '', discountPercent: 0, role: 'USER' });
     setDialogVisible(true);
   };
 
   const closeDialog = () => {
     setDialogVisible(false);
-    reset({ email: '', firstName: '', lastName: '', phoneNumber: '', role: 'USER' });
+    reset({ email: '', firstName: '', lastName: '', phoneNumber: '', discountPercent: 0, role: 'USER' });
   };
 
   const onSubmit = async (data: UserCreateFormValues) => {
@@ -68,6 +73,7 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
         firstName: data.firstName.trim(),
         lastName: data.lastName.trim(),
         phoneNumber: data.phoneNumber?.trim() || undefined,
+        discountPercent: data.discountPercent ?? 0,
         role: data.role,
       }).unwrap();
       showToast({ severity: 'success', summary: 'Usuario creado', detail: 'El usuario fue creado correctamente' });
@@ -108,6 +114,7 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
                 firstName: user.firstName ?? '',
                 lastName: user.lastName ?? '',
                 phoneNumber: user.phoneNumber ?? undefined,
+                discountPercent: user.discountPercent ?? 0,
                 role: user.role,
                 isActive: e.value,
               },
@@ -122,6 +129,10 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
   );
 
   const dateTemplate = (user: UserDto) => formatDate(user.createdAtUtc);
+
+  const discountTemplate = (user: UserDto) => (
+    <span className="font-medium">{user.discountPercent ?? 0}%</span>
+  );
 
   const actionsTemplate = (user: UserDto) => (
     <div className="flex gap-2">
@@ -152,7 +163,7 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
           id={`${testId}-search`}
           data-testid={`${testId}-search`}
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
           placeholder="Buscar usuarios..."
           className="w-full sm:w-20rem"
         />
@@ -168,10 +179,27 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
           action={{ label: 'Crear usuario', onClick: openDialog }}
         />
       ) : (
-        <DataTable value={users} dataKey="id" paginator rows={10} rowsPerPageOptions={[10, 25, 50]} className="surface-card border-round" stripedRows responsiveLayout="scroll">
+        <DataTable
+          value={users}
+          dataKey="id"
+          paginator
+          lazy
+          first={(page - 1) * rows}
+          rows={rows}
+          totalRecords={totalCount}
+          onPage={(event) => {
+            setRows(event.rows ?? rows);
+            setPage((event.page ?? 0) + 1);
+          }}
+          rowsPerPageOptions={[10, 25, 50]}
+          className="surface-card border-round"
+          stripedRows
+          responsiveLayout="scroll"
+        >
           <Column field="email" header="Email" sortable />
           <Column header="Nombre" body={nameTemplate} />
           <Column field="role" header="Rol" body={roleTemplate} />
+          <Column header="Descuento" body={discountTemplate} />
           <Column field="isActive" header="Estado" body={statusTemplate} />
           <Column field="createdAtUtc" header="Registro" body={dateTemplate} sortable />
           <Column header="Acciones" body={actionsTemplate} style={{ width: '100px' }} />
@@ -243,6 +271,26 @@ export function AdminUsersTable({ testId = 'admin-users-table' }: AdminUsersTabl
               )}
             />
             {errors.phoneNumber && <small className="p-error">{errors.phoneNumber.message}</small>}
+          </div>
+
+          <div className="flex flex-column gap-2">
+            <label htmlFor="user-discount" className="font-medium">Descuento (%)</label>
+            <Controller
+              name="discountPercent"
+              control={control}
+              render={({ field }) => (
+                <InputNumber
+                  inputId="user-discount"
+                  value={field.value ?? 0}
+                  onValueChange={(e) => field.onChange(e.value ?? 0)}
+                  min={0}
+                  max={100}
+                  suffix="%"
+                  className={`w-full ${errors.discountPercent ? 'p-invalid' : ''}`}
+                />
+              )}
+            />
+            {errors.discountPercent && <small className="p-error">{errors.discountPercent.message}</small>}
           </div>
 
           <div className="flex flex-column gap-2">

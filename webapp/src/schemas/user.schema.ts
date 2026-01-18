@@ -19,6 +19,12 @@ export const userCreateSchema = z.object({
     .string()
     .max(30, { message: 'El teléfono no puede superar los 30 caracteres' })
     .optional(),
+  discountPercent: z
+    .coerce
+    .number()
+    .min(0, { message: 'El descuento debe ser mayor o igual a 0' })
+    .max(100, { message: 'El descuento no puede superar 100' })
+    .optional(),
   role: userRoleEnum.default('USER'),
 });
 
@@ -37,6 +43,11 @@ export const userUpdateSchema = z.object({
     .string()
     .max(30, { message: 'El teléfono no puede superar los 30 caracteres' })
     .optional(),
+  discountPercent: z
+    .coerce
+    .number()
+    .min(0, { message: 'El descuento debe ser mayor o igual a 0' })
+    .max(100, { message: 'El descuento no puede superar 100' }),
   role: userRoleEnum,
   isActive: z.boolean(),
 });

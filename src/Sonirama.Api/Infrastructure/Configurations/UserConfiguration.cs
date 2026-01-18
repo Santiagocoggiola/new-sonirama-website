@@ -17,6 +17,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
         b.Property(x => x.FirstName).IsRequired().HasMaxLength(100);
         b.Property(x => x.LastName).IsRequired().HasMaxLength(100);
         b.Property(x => x.PhoneNumber).HasMaxLength(32);
+        b.Property(x => x.DiscountPercent).HasPrecision(5, 2).HasDefaultValue(0m);
         b.Property(x => x.IsActive).HasDefaultValue(true);
         b.Property(x => x.CreatedAtUtc).IsRequired();
         b.Property(x => x.UpdatedAtUtc);

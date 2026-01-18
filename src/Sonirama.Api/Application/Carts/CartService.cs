@@ -8,16 +8,21 @@ using Sonirama.Api.Domain.Entities;
 
 namespace Sonirama.Api.Application.Carts;
 
-public sealed class CartService(ICartRepository cartRepository, IProductRepository productRepository, IOrderService orderService) : ICartService
+public sealed class CartService(ICartRepository cartRepository,
+                                IProductRepository productRepository,
+                                IOrderService orderService,
+                                IUserRepository userRepository) : ICartService
 {
     private readonly ICartRepository _cartRepository = cartRepository;
     private readonly IProductRepository _productRepository = productRepository;
     private readonly IOrderService _orderService = orderService;
+    private readonly IUserRepository _userRepository = userRepository;
 
     public async Task<CartDto> GetCartAsync(Guid userId, CancellationToken ct)
     {
         var cart = await EnsureDetailedCartAsync(userId, ct);
-        return MapCart(cart);
+        var userDiscountPercent = await GetUserDiscountPercentAsync(userId, ct);
+        return MapCart(cart, userDiscountPercent);
     }
 
     public async Task<CartDto> AddItemAsync(Guid userId, CartAddItemRequest request, CancellationToken ct)
@@ -53,7 +58,8 @@ public sealed class CartService(ICartRepository cartRepository, IProductReposito
         await _cartRepository.UpdateAsync(cart, ct);
 
         var detailed = await _cartRepository.GetDetailedByUserIdAsync(userId, ct) ?? throw new InvalidOperationException("El carrito no está disponible");
-        return MapCart(detailed);
+        var userDiscountPercent = await GetUserDiscountPercentAsync(userId, ct);
+        return MapCart(detailed, userDiscountPercent);
     }
 
     public async Task<CartDto> RemoveItemAsync(Guid userId, CartRemoveItemRequest request, CancellationToken ct)
@@ -76,7 +82,8 @@ public sealed class CartService(ICartRepository cartRepository, IProductReposito
         await _cartRepository.UpdateAsync(cart, ct);
 
         var detailed = await _cartRepository.GetDetailedByUserIdAsync(userId, ct) ?? throw new InvalidOperationException("El carrito no está disponible");
-        return MapCart(detailed);
+        var userDiscountPercent = await GetUserDiscountPercentAsync(userId, ct);
+        return MapCart(detailed, userDiscountPercent);
     }
 
     public Task<OrderDto> CheckoutAsync(Guid userId, CancellationToken ct)
@@ -96,20 +103,24 @@ public sealed class CartService(ICartRepository cartRepository, IProductReposito
         return await _cartRepository.GetDetailedByUserIdAsync(userId, ct) ?? throw new InvalidOperationException("No se pudo crear el carrito");
     }
 
-    private CartDto MapCart(Cart cart)
+    private CartDto MapCart(Cart cart, decimal userDiscountPercent)
     {
-        var items = cart.Items.Select(MapCartItem).ToList();
+        var items = cart.Items.Select(item => MapCartItem(item, userDiscountPercent)).ToList();
+        var subtotal = items.Sum(i => i.UnitPriceBase * i.Quantity);
         var total = items.Sum(i => i.LineTotal);
         return new CartDto
         {
             Id = cart.Id,
             Items = items,
+            Subtotal = subtotal,
+            DiscountTotal = subtotal - total,
+            UserDiscountPercent = userDiscountPercent,
             Total = total,
             UpdatedAtUtc = cart.UpdatedAtUtc
         };
     }
 
-    private CartItemDto MapCartItem(CartItem item)
+    private CartItemDto MapCartItem(CartItem item, decimal userDiscountPercent)
     {
         var product = item.Product ?? throw new InvalidOperationException("El item no tiene información del producto");
         var unitPriceBase = product.Price;
@@ -120,8 +131,9 @@ public sealed class CartService(ICartRepository cartRepository, IProductReposito
             .OrderByDescending(d => d.DiscountPercent)
             .FirstOrDefault();
 
-        var discountPercent = discount?.DiscountPercent ?? 0m;
-        var unitPriceWithDiscount = unitPriceBase * (1 - (discountPercent / 100m));
+        var bulkDiscountPercent = discount?.DiscountPercent ?? 0m;
+        var combinedDiscountPercent = 100m * (1 - (1 - (bulkDiscountPercent / 100m)) * (1 - (userDiscountPercent / 100m)));
+        var unitPriceWithDiscount = unitPriceBase * (1 - (combinedDiscountPercent / 100m));
         var lineTotal = unitPriceWithDiscount * item.Quantity;
 
         return new CartItemDto
@@ -131,10 +143,17 @@ public sealed class CartService(ICartRepository cartRepository, IProductReposito
             ProductName = product.Name,
             Quantity = item.Quantity,
             UnitPriceBase = unitPriceBase,
-            DiscountPercent = discountPercent,
+            DiscountPercent = combinedDiscountPercent,
+            UserDiscountPercent = userDiscountPercent,
             UnitPriceWithDiscount = unitPriceWithDiscount,
             LineTotal = lineTotal,
             MinBulkQuantityApplied = discount?.MinQuantity
         };
+    }
+
+    private async Task<decimal> GetUserDiscountPercentAsync(Guid userId, CancellationToken ct)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, ct);
+        return user?.DiscountPercent ?? 0m;
     }
 }

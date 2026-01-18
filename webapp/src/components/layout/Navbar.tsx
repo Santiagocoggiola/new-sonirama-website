@@ -1,6 +1,4 @@
 'use client';
-
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from 'primereact/button';
 import { Badge } from 'primereact/badge';
@@ -70,7 +68,7 @@ export function Navbar({
     <header
       id={testId}
       data-testid={testId}
-      className="surface-card border-bottom-1 surface-border fixed top-0 left-0 right-0"
+      className="surface-card border-bottom-1 surface-border fixed top-0 left-0 right-0 app-navbar"
       style={{
         height: 'var(--header-height)',
         zIndex: 1000,

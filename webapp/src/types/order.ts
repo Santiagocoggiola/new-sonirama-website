@@ -42,6 +42,8 @@ export interface OrderDto {
   orderNumber: string; // alias for number
   status: OrderStatus;
   userId: string;
+  userPhoneNumber?: string | null;
+  userDiscountPercent: number;
   subtotal: number;
   discountTotal: number;
   bulkDiscountAmount: number;

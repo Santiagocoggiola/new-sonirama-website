@@ -31,6 +31,7 @@ const buildProductFormData = (
   appendIfPresent('price', body.price);
   appendIfPresent('currency', body.currency ?? 'ARS');
   appendIfPresent('category', body.category);
+  body.categoryIds?.forEach((id) => formData.append('categoryIds', id));
   appendIfPresent('isActive', body.isActive ?? true);
 
   body.images?.forEach((file) => formData.append('images', file));
@@ -124,9 +125,12 @@ export const productsApi = baseApi.injectEndpoints({
       }
     ),
     // Bulk Discounts
-    getBulkDiscounts: builder.query<BulkDiscountDto[], string>({
-      query: (productId) => `/products/${productId}/discounts`,
-      providesTags: (result, error, productId) => [
+    getBulkDiscounts: builder.query<PagedResult<BulkDiscountDto>, { productId: string; page?: number; pageSize?: number }>({
+      query: ({ productId, page, pageSize }) => ({
+        url: `/products/${productId}/discounts`,
+        params: { page, pageSize },
+      }),
+      providesTags: (result, error, { productId }) => [
         { type: 'BulkDiscount', id: productId },
       ],
     }),

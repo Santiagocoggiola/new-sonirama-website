@@ -62,6 +62,16 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
         return Ok(dto);
     }
 
+    [HttpPost("{id:guid}/cancel-admin")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<ActionResult<OrderDto>> CancelByAdminAsync(Guid id, [FromBody] OrderCancelRequest request, CancellationToken ct)
+    {
+        var adminId = User.GetUserId();
+        if (adminId is null) return Unauthorized();
+        var dto = await orderService.CancelByAdminAsync(id, adminId.Value, request, ct);
+        return Ok(dto);
+    }
+
     [HttpPost("{id:guid}/approve")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<OrderDto>> ApproveAsync(Guid id, [FromBody] OrderApproveRequest? request, CancellationToken ct)

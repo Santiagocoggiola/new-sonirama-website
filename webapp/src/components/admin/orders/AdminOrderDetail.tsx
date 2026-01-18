@@ -9,13 +9,14 @@ import { Divider } from 'primereact/divider';
 import { Skeleton } from 'primereact/skeleton';
 import { InputNumber } from 'primereact/inputnumber';
 import { InputText } from 'primereact/inputtext';
+import { Dialog } from 'primereact/dialog';
 import {
   useGetOrderByIdQuery,
   useApproveOrderMutation,
-  useRejectOrderMutation,
   useMarkOrderReadyMutation,
   useCompleteOrderMutation,
   useModifyOrderMutation,
+  useCancelOrderAdminMutation,
 } from '@/store/api/ordersApi';
 import { formatPrice, formatDateTime, buildAssetUrl } from '@/lib/utils';
 import { getOrderStatusLabel, getOrderStatusSeverity } from '@/types/order';
@@ -32,16 +33,18 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
   const router = useRouter();
   const { data: order, isLoading, isError } = useGetOrderByIdQuery(orderId);
   const [approveOrder, { isLoading: isApproving }] = useApproveOrderMutation();
-  const [rejectOrder, { isLoading: isRejecting }] = useRejectOrderMutation();
   const [markReady, { isLoading: isMarkingReady }] = useMarkOrderReadyMutation();
   const [completeOrder, { isLoading: isCompleting }] = useCompleteOrderMutation();
   const [modifyOrder, { isLoading: isModifying }] = useModifyOrderMutation();
+  const [cancelOrderAdmin, { isLoading: isCancelling }] = useCancelOrderAdminMutation();
 
   const [reason, setReason] = useState('');
   const [adminNotes, setAdminNotes] = useState('');
   const [draftItems, setDraftItems] = useState<OrderItemDto[]>([]);
   const [page, setPage] = useState(1);
   const [isEditing, setIsEditing] = useState(false);
+  const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const pageSize = 10;
 
   const resetDraft = useCallback(() => {
@@ -67,18 +70,6 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
     }
   };
 
-  const handleReject = async () => {
-    const reason = prompt('Motivo del rechazo:');
-    if (reason) {
-      try {
-        await rejectOrder({ id: orderId, body: { reason } }).unwrap();
-        showToast({ severity: 'success', summary: 'Orden rechazada' });
-      } catch {
-        showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo rechazar la orden' });
-      }
-    }
-  };
-
   const handleMarkReady = async () => {
     try {
       await markReady({ id: orderId }).unwrap();
@@ -97,6 +88,22 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
     }
   };
 
+  const handleCancelOrder = async () => {
+    if (!cancelReason.trim()) {
+      showToast({ severity: 'warn', summary: 'Falta motivo', detail: 'Indicá el motivo de la cancelación' });
+      return;
+    }
+
+    try {
+      await cancelOrderAdmin({ id: orderId, body: { reason: cancelReason.trim() } }).unwrap();
+      showToast({ severity: 'success', summary: 'Orden cancelada' });
+      setIsCancelDialogOpen(false);
+      setCancelReason('');
+    } catch {
+      showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo cancelar la orden' });
+    }
+  };
+
   if (isLoading) {
     return <Skeleton height="400px" className="border-round" />;
   }
@@ -109,6 +116,7 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
   const canMarkReady = order.status === 'Approved' || order.status === 'Confirmed';
   const canComplete = order.status === 'ReadyForPickup';
   const canModify = order.status === 'PendingApproval';
+  const canCancel = order.status !== 'Cancelled';
 
   const handleSaveModifications = async () => {
     if (!reason.trim()) {
@@ -284,10 +292,7 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
 
                 <div className="flex flex-wrap gap-2">
                   {canApprove && (
-                    <>
-                      <Button label="Aprobar" icon="pi pi-check" severity="success" loading={isApproving} onClick={handleApprove} />
-                      <Button label="Rechazar" icon="pi pi-times" severity="danger" loading={isRejecting} onClick={handleReject} />
-                    </>
+                    <Button label="Aprobar" icon="pi pi-check" severity="success" loading={isApproving} onClick={handleApprove} />
                   )}
                   {canMarkReady && (
                     <Button label="Marcar lista para retiro" icon="pi pi-box" loading={isMarkingReady} onClick={handleMarkReady} />
@@ -295,15 +300,28 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
                   {canComplete && (
                     <Button label="Completar entrega" icon="pi pi-check-circle" severity="success" loading={isCompleting} onClick={handleComplete} />
                   )}
-                  {!canApprove && !canMarkReady && !canComplete && !canModify && (
-                    <p className="text-color-secondary m-0">No hay acciones disponibles para esta orden.</p>
-                  )}
+                  <Button
+                    label="Cancelar"
+                    icon="pi pi-ban"
+                    severity="danger"
+                    loading={isCancelling}
+                    disabled={!canCancel}
+                    onClick={() => setIsCancelDialogOpen(true)}
+                  />
                 </div>
               </div>
             </Card>
           </div>
 
           <div className="col-12 lg:col-4">
+            <Card title="Contacto" className="mb-4">
+              <div className="flex flex-column gap-2">
+                <div className="flex justify-content-between">
+                  <span className="text-color-secondary">Teléfono</span>
+                  <span>{order.userPhoneNumber || 'No informado'}</span>
+                </div>
+              </div>
+            </Card>
             <Card title="Resumen">
               <div className="flex flex-column gap-3">
                 <div className="flex justify-content-between">
@@ -316,6 +334,40 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
                     <span>-{formatPrice(order.discountTotal || order.bulkDiscountAmount)}</span>
                   </div>
                 )}
+                {(order.cancellationReason || order.modificationReason || order.rejectionReason || order.adminNotes || order.userNotes) && (
+                  <div className="flex flex-column gap-2 text-sm surface-50 border-round p-2">
+                    {order.cancellationReason && (
+                      <div className="flex flex-column">
+                        <span className="text-color-secondary">Motivo de cancelación</span>
+                        <span>{order.cancellationReason}</span>
+                      </div>
+                    )}
+                    {order.modificationReason && (
+                      <div className="flex flex-column">
+                        <span className="text-color-secondary">Motivo de modificación</span>
+                        <span>{order.modificationReason}</span>
+                      </div>
+                    )}
+                    {order.rejectionReason && (
+                      <div className="flex flex-column">
+                        <span className="text-color-secondary">Motivo de rechazo</span>
+                        <span>{order.rejectionReason}</span>
+                      </div>
+                    )}
+                    {order.adminNotes && (
+                      <div className="flex flex-column">
+                        <span className="text-color-secondary">Notas admin</span>
+                        <span>{order.adminNotes}</span>
+                      </div>
+                    )}
+                    {order.userNotes && (
+                      <div className="flex flex-column">
+                        <span className="text-color-secondary">Notas del cliente</span>
+                        <span>{order.userNotes}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Divider className="my-2" />
                 <div className="flex justify-content-between">
                   <span className="text-xl font-bold">Total</span>
@@ -326,6 +378,48 @@ export function AdminOrderDetail({ orderId, testId = 'admin-order-detail' }: Adm
           </div>
         </div>
       </div>
+
+      <Dialog
+        header="Motivo de cancelación"
+        visible={isCancelDialogOpen}
+        onHide={() => {
+          setIsCancelDialogOpen(false);
+          setCancelReason('');
+        }}
+        modal
+        className="w-full sm:w-30rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button
+              label="Cancelar"
+              outlined
+              onClick={() => {
+                setIsCancelDialogOpen(false);
+                setCancelReason('');
+              }}
+            />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              loading={isCancelling}
+              onClick={handleCancelOrder}
+            />
+          </div>
+        )}
+      >
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-cancel-reason`} className="text-sm text-color-secondary">
+            Motivo
+          </label>
+          <InputText
+            id={`${testId}-cancel-reason`}
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Ej: Stock insuficiente"
+            autoFocus
+          />
+        </div>
+      </Dialog>
     </>
   );
 }

@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminCatalogPreviewPage() {
-  return <ProductsPageClient mode="admin-preview" />;
+  return <ProductsPageClient mode="admin-preview" showSidebar={false} />;
 }

@@ -1,10 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
 import { Divider } from 'primereact/divider';
 import { ProgressSpinner } from 'primereact/progressspinner';
+import { Dialog } from 'primereact/dialog';
 import { useCart } from '@/hooks/useCart';
 import { formatPrice } from '@/lib/utils';
 import { CartItemCard } from './CartItemCard';
@@ -21,6 +23,7 @@ interface CartViewProps {
 export function CartView({ testId = 'cart-view' }: CartViewProps) {
   const router = useRouter();
   const { cart, isLoading, clearCart, checkout, isCheckingOut } = useCart();
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
   const handleCheckout = async () => {
     const result = await checkout();
@@ -83,7 +86,7 @@ export function CartView({ testId = 'cart-view' }: CartViewProps) {
               text
               severity="danger"
               size="small"
-              onClick={clearCart}
+              onClick={() => setConfirmClearOpen(true)}
             />
           </div>
 
@@ -114,6 +117,25 @@ export function CartView({ testId = 'cart-view' }: CartViewProps) {
           style={{ top: 'calc(var(--header-height) + 1rem)' }}
         >
           <div className="flex flex-column gap-3">
+            <div className="flex justify-content-between">
+              <span className="text-color-secondary">Subtotal</span>
+              <span data-testid={`${testId}-subtotal`}>{formatPrice(cart.subtotal)}</span>
+            </div>
+
+            {cart.discountTotal > 0 && (
+              <div className="flex justify-content-between text-green-600">
+                <span>Descuento</span>
+                <span data-testid={`${testId}-discount`}>-{formatPrice(cart.discountTotal)}</span>
+              </div>
+            )}
+
+            {cart.userDiscountPercent > 0 && (
+              <div className="flex justify-content-between text-color-secondary">
+                <span>Descuento cliente</span>
+                <span data-testid={`${testId}-user-discount`}>{cart.userDiscountPercent}%</span>
+              </div>
+            )}
+
             {/* Total */}
             <div className="flex justify-content-between">
               <span className="text-xl font-bold">Total</span>
@@ -150,6 +172,29 @@ export function CartView({ testId = 'cart-view' }: CartViewProps) {
           </div>
         </Card>
       </div>
+
+      <Dialog
+        header="Vaciar carrito"
+        visible={confirmClearOpen}
+        onHide={() => setConfirmClearOpen(false)}
+        modal
+        className="w-full sm:w-26rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button label="Cancelar" outlined onClick={() => setConfirmClearOpen(false)} />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              onClick={async () => {
+                await clearCart();
+                setConfirmClearOpen(false);
+              }}
+            />
+          </div>
+        )}
+      >
+        <p className="m-0">¿Vaciar todos los productos del carrito?</p>
+      </Dialog>
     </div>
   );
 }

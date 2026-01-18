@@ -10,6 +10,7 @@ export interface UserDto {
   firstName: string;
   lastName: string;
   phoneNumber: string | null;
+  discountPercent: number;
   role: UserRole;
   isActive: boolean;
   createdAtUtc: string;
@@ -21,6 +22,7 @@ export interface UserCreateRequest {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  discountPercent?: number;
   role?: UserRole;
 }
 
@@ -28,6 +30,7 @@ export interface UserUpdateRequest {
   firstName: string;
   lastName: string;
   phoneNumber?: string;
+  discountPercent: number;
   role: UserRole;
   isActive: boolean;
 }

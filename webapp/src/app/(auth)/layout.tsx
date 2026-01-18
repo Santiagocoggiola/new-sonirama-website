@@ -27,7 +27,7 @@ export default function AuthLayout({
       </div>
 
       {/* Main content */}
-      <div className="w-full" style={{ maxWidth: '400px' }}>
+      <div className="w-full" style={{ maxWidth: '640px' }}>
         {/* Card */}
         <div className="surface-card border-round-2xl shadow-3 p-5 md:p-6">
           {/* Logo header */}
@@ -48,10 +48,6 @@ export default function AuthLayout({
 
         {/* Footer links */}
         <div className="flex align-items-center justify-content-center gap-3 mt-4 text-sm">
-          <Link href="/products" className="text-color-secondary hover:text-primary no-underline transition-colors">
-            Ver catálogo
-          </Link>
-          <span className="text-surface-400">•</span>
           <Link href="/contact" className="text-color-secondary hover:text-primary no-underline transition-colors">
             Contacto
           </Link>

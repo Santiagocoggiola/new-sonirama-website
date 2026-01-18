@@ -37,7 +37,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         {/* Main wrapper - below fixed navbar */}
         <div
-          className="flex"
+          className="flex gap-3"
           style={{ 
             paddingTop: 'var(--header-height)',
             minHeight: '100vh',

@@ -9,6 +9,7 @@ export interface CartItemDto {
   quantity: number;
   unitPriceBase: number;
   discountPercent: number;
+  userDiscountPercent: number;
   unitPriceWithDiscount: number;
   lineTotal: number;
   minBulkQuantityApplied: number | null;
@@ -17,6 +18,9 @@ export interface CartItemDto {
 export interface CartDto {
   id: string;
   items: CartItemDto[];
+  subtotal: number;
+  discountTotal: number;
+  userDiscountPercent: number;
   total: number;
   updatedAtUtc: string;
 }

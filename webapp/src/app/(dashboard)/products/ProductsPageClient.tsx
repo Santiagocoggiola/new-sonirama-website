@@ -16,7 +16,7 @@ import { ProductsGrid } from '@/components/products';
  */
 export type ProductsPageMode = 'user' | 'admin-preview';
 
-export function ProductsPageClient({ mode = 'user' }: { mode?: ProductsPageMode }) {
+export function ProductsPageClient({ mode = 'user', showSidebar = true }: { mode?: ProductsPageMode; showSidebar?: boolean }) {
   const dispatch = useAppDispatch();
   const filters = useAppSelector(selectFilters);
 
@@ -65,84 +65,86 @@ export function ProductsPageClient({ mode = 'user' }: { mode?: ProductsPageMode 
   return (
     <div id="products-page" data-testid="products-page" className="products-page">
       <div className="products-shell">
-        <aside className="products-sidebar">
-          <Card className="shadow-1 products-sidebar-card" pt={{ content: { className: 'p-3' } }}>
-            <div className="flex flex-column gap-3">
-              <div className="flex flex-column gap-2">
-                <label className="font-medium">Buscar</label>
-                <InputText
-                  value={filters.query}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  placeholder="Nombre o código"
-                  data-testid="products-search-side"
-                />
-              </div>
-
-              <div className="flex flex-column gap-2">
-                <label className="font-medium">Categoría</label>
-                <Dropdown
-                  value={filters.categoryIds[0] ?? null}
-                  options={categoryOptions}
-                  onChange={(e) => handleCategory(e.value)}
-                  placeholder="Todas"
-                  loading={isLoadingCategories}
-                  className="w-full"
-                  data-testid="products-category-side"
-                />
-              </div>
-
-              <div className="flex flex-column gap-2">
-                <label className="font-medium">Precio</label>
-                <div className="flex gap-2">
-                  <InputNumber
-                    value={filters.priceMin}
-                    onValueChange={(e) => handlePriceMin(e.value ?? null)}
-                    mode="currency"
-                    currency="ARS"
-                    locale="es-AR"
-                    placeholder="Mín"
-                    className="w-full"
-                    inputClassName="w-full"
-                    data-testid="products-price-min"
-                  />
-                  <InputNumber
-                    value={filters.priceMax}
-                    onValueChange={(e) => handlePriceMax(e.value ?? null)}
-                    mode="currency"
-                    currency="ARS"
-                    locale="es-AR"
-                    placeholder="Máx"
-                    className="w-full"
-                    inputClassName="w-full"
-                    data-testid="products-price-max"
+        {showSidebar && (
+          <aside className="products-sidebar">
+            <Card className="shadow-1 products-sidebar-card" pt={{ content: { className: 'p-3' } }}>
+              <div className="flex flex-column gap-3">
+                <div className="flex flex-column gap-2">
+                  <label className="font-medium">Buscar</label>
+                  <InputText
+                    value={filters.query}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    placeholder="Nombre o código"
+                    data-testid="products-search-side"
                   />
                 </div>
-              </div>
 
-              <div className="flex flex-column gap-2">
-                <label className="font-medium">Ordenar por</label>
-                <Dropdown
-                  value={{ sortBy: filters.sortBy, sortDir: filters.sortDir }}
-                  options={sortOptions}
-                  optionLabel="label"
-                  onChange={(e) => handleSortChange(e.value)}
-                  className="w-full"
-                  data-testid="products-sort-side"
+                <div className="flex flex-column gap-2">
+                  <label className="font-medium">Categoría</label>
+                  <Dropdown
+                    value={filters.categoryIds[0] ?? null}
+                    options={categoryOptions}
+                    onChange={(e) => handleCategory(e.value)}
+                    placeholder="Todas"
+                    loading={isLoadingCategories}
+                    className="w-full"
+                    data-testid="products-category-side"
+                  />
+                </div>
+
+                <div className="flex flex-column gap-2">
+                  <label className="font-medium">Precio</label>
+                  <div className="flex gap-2">
+                    <InputNumber
+                      value={filters.priceMin}
+                      onValueChange={(e) => handlePriceMin(e.value ?? null)}
+                      mode="currency"
+                      currency="ARS"
+                      locale="es-AR"
+                      placeholder="Mín"
+                      className="w-full"
+                      inputClassName="w-full"
+                      data-testid="products-price-min"
+                    />
+                    <InputNumber
+                      value={filters.priceMax}
+                      onValueChange={(e) => handlePriceMax(e.value ?? null)}
+                      mode="currency"
+                      currency="ARS"
+                      locale="es-AR"
+                      placeholder="Máx"
+                      className="w-full"
+                      inputClassName="w-full"
+                      data-testid="products-price-max"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-column gap-2">
+                  <label className="font-medium">Ordenar por</label>
+                  <Dropdown
+                    value={{ sortBy: filters.sortBy, sortDir: filters.sortDir }}
+                    options={sortOptions}
+                    optionLabel="label"
+                    onChange={(e) => handleSortChange(e.value)}
+                    className="w-full"
+                    data-testid="products-sort-side"
+                  />
+                </div>
+
+                <Button
+                  type="button"
+                  label="Limpiar filtros"
+                  icon="pi pi-filter-slash"
+                  outlined
+                  severity="secondary"
+                  onClick={handleClear}
+                  data-testid="products-clear-side"
                 />
               </div>
-
-              <Button
-                type="button"
-                label="Limpiar filtros"
-                icon="pi pi-filter-slash"
-                outlined
-                severity="secondary"
-                onClick={handleClear}
-                data-testid="products-clear-side"
-              />
-            </div>
-          </Card>
-        </aside>
+            </Card>
+          </aside>
+        )}
 
         <main className="products-main">
           <ProductsGrid testId="products-grid" mode={mode} />

@@ -10,6 +10,8 @@ public sealed class OrderDto
     public OrderStatus Status { get; set; }
     public string StatusName => Status.ToString();
     public Guid UserId { get; set; }
+    public string? UserPhoneNumber { get; set; }
+    public decimal UserDiscountPercent { get; set; }
     public decimal Subtotal { get; set; }
     public decimal DiscountTotal { get; set; }
     public decimal BulkDiscountAmount => DiscountTotal;

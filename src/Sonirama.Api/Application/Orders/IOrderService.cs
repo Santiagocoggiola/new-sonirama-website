@@ -10,6 +10,7 @@ public interface IOrderService
     Task<PagedResult<OrderSummaryDto>> ListAsync(OrderListRequest request, Guid requesterId, bool requesterIsAdmin, CancellationToken ct);
     Task<OrderDto> ConfirmAsync(Guid orderId, Guid userId, OrderConfirmRequest? request, CancellationToken ct);
     Task<OrderDto> CancelAsync(Guid orderId, Guid userId, OrderCancelRequest request, CancellationToken ct);
+    Task<OrderDto> CancelByAdminAsync(Guid orderId, Guid adminUserId, OrderCancelRequest request, CancellationToken ct);
     Task<OrderDto> ApproveAsync(Guid orderId, Guid adminUserId, OrderApproveRequest? request, CancellationToken ct);
     Task<OrderDto> RejectAsync(Guid orderId, Guid adminUserId, OrderRejectRequest request, CancellationToken ct);
     Task<OrderDto> MarkReadyAsync(Guid orderId, Guid adminUserId, OrderReadyRequest? request, CancellationToken ct);

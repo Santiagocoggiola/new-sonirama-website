@@ -15,16 +15,24 @@ interface ProductCardProps {
   testId?: string;
   /** Presentation mode */
   mode?: 'user' | 'admin-preview';
+  userDiscountPercent?: number;
 }
 
 /**
  * Product card component for grid display
  */
-export function ProductCard({ product, testId = 'product-card', mode = 'user' }: ProductCardProps) {
+export function ProductCard({ product, testId = 'product-card', mode = 'user', userDiscountPercent = 0 }: ProductCardProps) {
   const router = useRouter();
   const { addItem, updateQuantity, getQuantity, isLoading } = useCart();
   const isAdminMode = mode === 'admin-preview';
   const cardId = `${testId}-${product.id}`;
+  const canShowDiscount = !isAdminMode && userDiscountPercent > 0;
+  const discountedPrice = product.price * (1 - (userDiscountPercent / 100));
+  const categories = product.categories && product.categories.length > 0
+    ? product.categories.map((cat) => cat.name)
+    : product.category && !/^[0-9a-fA-F-]{36}$/.test(product.category)
+      ? [product.category]
+      : [];
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -96,10 +104,31 @@ export function ProductCard({ product, testId = 'product-card', mode = 'user' }:
             {product.name}
           </h3>
 
+          {categories.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <Tag key={`${cardId}-cat-${category}`} value={category} severity="info" className="text-xs" />
+              ))}
+            </div>
+          )}
+
+          {product.description && (
+            <p className="m-0 text-sm text-color-secondary line-clamp-2">
+              {product.description}
+            </p>
+          )}
+
           <div className="flex align-items-center justify-content-between gap-2">
-            <span className="text-2xl font-bold text-primary" data-testid={`${cardId}-price`}>
-              {formatPrice(product.price)}
-            </span>
+            <div className="flex align-items-baseline gap-2">
+              <span className="text-2xl font-bold text-primary" data-testid={`${cardId}-price`}>
+                {formatPrice(canShowDiscount ? discountedPrice : product.price)}
+              </span>
+              {canShowDiscount && (
+                <span className="text-sm text-color-secondary line-through" data-testid={`${cardId}-price-original`}>
+                  {formatPrice(product.price)}
+                </span>
+              )}
+            </div>
             <span className="text-xs text-color-secondary">Stock: {product.isActive ? 'Disponible' : 'No disponible'}</span>
           </div>
 

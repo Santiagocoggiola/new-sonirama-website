@@ -54,20 +54,22 @@ export function LoginForm({ onSuccess, testId = 'login-form' }: LoginFormProps) 
 
       // Redirect based on role, with returnUrl as hint
       const returnUrl = searchParams.get('returnUrl');
+      const decodedReturnUrl = returnUrl ? decodeURIComponent(returnUrl) : null;
       const isAdmin = String(result.role).toUpperCase() === 'ADMIN';
+      const isAdminReturnUrl = !!decodedReturnUrl && decodedReturnUrl.startsWith('/admin');
       
       let targetUrl: string;
       if (isAdmin) {
         // Admin users: use returnUrl only if it's an admin route, otherwise go to admin/products
-        if (returnUrl && decodeURIComponent(returnUrl).startsWith('/admin')) {
-          targetUrl = decodeURIComponent(returnUrl);
+        if (decodedReturnUrl && isAdminReturnUrl) {
+          targetUrl = decodedReturnUrl;
         } else {
           targetUrl = '/admin/products';
         }
       } else {
-        // Regular users: use returnUrl if provided, otherwise go to products
-        if (returnUrl) {
-          targetUrl = decodeURIComponent(returnUrl);
+        // Regular users: ignore admin returnUrl and fall back to products
+        if (decodedReturnUrl && !isAdminReturnUrl) {
+          targetUrl = decodedReturnUrl;
         } else {
           targetUrl = '/products';
         }

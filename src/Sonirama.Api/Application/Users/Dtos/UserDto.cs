@@ -10,6 +10,7 @@ public sealed class UserDto
     public string FirstName { get; init; } = default!;
     public string LastName { get; init; } = default!;
     public string? PhoneNumber { get; init; }
+    public decimal DiscountPercent { get; init; }
     public string Role { get; init; } = default!;
     public bool IsActive { get; init; }
     public DateTime CreatedAtUtc { get; init; }

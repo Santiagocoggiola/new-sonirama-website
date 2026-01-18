@@ -76,6 +76,17 @@ export const ordersApi = baseApi.injectEndpoints({
         { type: 'Orders', id: 'LIST' },
       ],
     }),
+    cancelOrderAdmin: builder.mutation<OrderDto, { id: string; body: OrderCancelRequest }>({
+      query: ({ id, body }) => ({
+        url: `/orders/${id}/cancel-admin`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Order', id },
+        { type: 'Orders', id: 'LIST' },
+      ],
+    }),
     acceptModifications: builder.mutation<
       OrderDto,
       { id: string; body?: OrderAcceptModificationsRequest }
@@ -181,6 +192,7 @@ export const {
   useLazyGetOrderByIdQuery,
   useConfirmOrderMutation,
   useCancelOrderMutation,
+  useCancelOrderAdminMutation,
   useAcceptModificationsMutation,
   useRejectModificationsMutation,
   useApproveOrderMutation,

@@ -15,6 +15,7 @@ public sealed class OrderConfiguration : IEntityTypeConfiguration<Order>
         b.Property(x => x.Status).HasDefaultValue(OrderStatus.PendingApproval);
         b.Property(x => x.Subtotal).HasPrecision(18, 2);
         b.Property(x => x.DiscountTotal).HasPrecision(18, 2);
+        b.Property(x => x.UserDiscountPercent).HasPrecision(5, 2).HasDefaultValue(0m);
         b.Property(x => x.Total).HasPrecision(18, 2);
         b.Property(x => x.Currency).IsRequired().HasMaxLength(3);
         b.Property(x => x.UserNotes).HasMaxLength(2000);

@@ -13,12 +13,16 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
         => await db.Products
             .Include(p => p.BulkDiscounts)
             .Include(p => p.Images)
+            .Include(p => p.ProductsLink)
+            .ThenInclude(pc => pc.Category)
             .FirstOrDefaultAsync(p => p.Id == id, ct);
 
     public async Task<Product?> GetByCodeAsync(string code, CancellationToken ct)
         => await db.Products
             .Include(p => p.BulkDiscounts)
             .Include(p => p.Images)
+            .Include(p => p.ProductsLink)
+            .ThenInclude(pc => pc.Category)
             .FirstOrDefaultAsync(p => p.Code == code, ct);
 
     public async Task<bool> ExistsAsync(string code, CancellationToken ct)
@@ -38,6 +42,7 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
             .Include(p => p.BulkDiscounts)
             .Include(p => p.Images)
             .Include(p => p.ProductsLink)
+            .ThenInclude(pc => pc.Category)
             .ToListAsync(ct);
 
         return new PagedResult<Product>
@@ -104,7 +109,15 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
             }
         }
 
-        return query.Where(p => db.ProductCategories.Any(pc => pc.ProductId == p.Id && targetIds.Contains(pc.CategoryId)));
+        var targetIdStrings = targetIds.Select(id => id.ToString()).ToHashSet();
+        var targetNames = await db.Categories
+            .Where(c => targetIds.Contains(c.Id))
+            .Select(c => c.Name)
+            .ToListAsync(ct);
+
+        return query.Where(p =>
+            db.ProductCategories.Any(pc => pc.ProductId == p.Id && targetIds.Contains(pc.CategoryId))
+            || (p.Category != null && (targetNames.Contains(p.Category) || targetIdStrings.Contains(p.Category))));
     }
 
     private static IQueryable<Product> ApplySorting(IQueryable<Product> query, ProductListFilter filter)
@@ -133,8 +146,9 @@ public sealed class ProductRepository(AppDbContext db) : IProductRepository
 
     public async Task DeleteAsync(Product product, CancellationToken ct)
     {
-        product.IsActive = false;
-        db.Products.Update(product);
+        var cartItems = db.CartItems.Where(i => i.ProductId == product.Id);
+        db.CartItems.RemoveRange(cartItems);
+        db.Products.Remove(product);
         await db.SaveChangesAsync(ct);
     }
 }

@@ -20,6 +20,7 @@ public sealed class ProductService : IProductService
     private readonly IProductRepository _productRepo;
     private readonly IProductImageRepository _imageRepo;
     private readonly IProductImageStorage _imageStorage;
+    private readonly ICategoryRepository _categoryRepo;
     private readonly IMapper _mapper;
 
     public ProductService(
@@ -27,11 +28,13 @@ public sealed class ProductService : IProductService
         IBulkDiscountRepository discountRepo,
         IProductImageRepository imageRepo,
         IProductImageStorage imageStorage,
+        ICategoryRepository categoryRepo,
         IMapper mapper)
     {
         _productRepo = productRepo;
         _imageRepo = imageRepo;
         _imageStorage = imageStorage;
+        _categoryRepo = categoryRepo;
         _mapper = mapper;
         // discountRepo reservado para futura lógica (no usado aún)
         _ = discountRepo;
@@ -54,6 +57,8 @@ public sealed class ProductService : IProductService
             UpdatedAtUtc = DateTime.UtcNow
         };
 
+        await SyncProductCategoriesAsync(product, request.CategoryIds, request.Category, ct);
+
         await _productRepo.AddAsync(product, ct);
         await AddImagesAsync(product, request.Images, ct);
 
@@ -73,6 +78,8 @@ public sealed class ProductService : IProductService
         product.IsActive = request.IsActive;
         product.UpdatedAtUtc = DateTime.UtcNow;
 
+        await SyncProductCategoriesAsync(product, request.CategoryIds, request.Category, ct);
+
         await _productRepo.UpdateAsync(product, ct);
         await AddImagesAsync(product, request.Images, ct);
         return _mapper.Map<ProductDto>(product);
@@ -81,13 +88,17 @@ public sealed class ProductService : IProductService
     public async Task<ProductDto> GetByIdAsync(Guid id, CancellationToken ct)
     {
         var product = await _productRepo.GetByIdAsync(id, ct) ?? throw new NotFoundException(NotFoundMessage);
-        return _mapper.Map<ProductDto>(product);
+        var dto = _mapper.Map<ProductDto>(product);
+        await EnrichCategoryInfoAsync(dto, ct);
+        return dto;
     }
 
     public async Task<ProductDto> GetByCodeAsync(string code, CancellationToken ct)
     {
         var product = await _productRepo.GetByCodeAsync(code, ct) ?? throw new NotFoundException(NotFoundMessage);
-        return _mapper.Map<ProductDto>(product);
+        var dto = _mapper.Map<ProductDto>(product);
+        await EnrichCategoryInfoAsync(dto, ct);
+        return dto;
     }
 
     public async Task DeleteAsync(Guid id, CancellationToken ct)
@@ -112,12 +123,18 @@ public sealed class ProductService : IProductService
             SortDir = filter.SortDir
         };
         var page = await _productRepo.ListAsync(repoFilter, ct);
+        var items = page.Items.Select(_mapper.Map<ProductDto>).ToList();
+        foreach (var item in items)
+        {
+            await EnrichCategoryInfoAsync(item, ct);
+        }
+
         return new PagedResult<ProductDto>
         {
             Page = page.Page,
             PageSize = page.PageSize,
             TotalCount = page.TotalCount,
-            Items = page.Items.Select(_mapper.Map<ProductDto>).ToList()
+            Items = items
         };
     }
 
@@ -178,5 +195,85 @@ public sealed class ProductService : IProductService
         }
 
         return storedImages;
+    }
+
+    private async Task SyncProductCategoriesAsync(Product product, IEnumerable<Guid>? categoryIds, string? categoryValue, CancellationToken ct)
+    {
+        if (categoryIds is not null && categoryIds.Any())
+        {
+            var categories = await _categoryRepo.ListAsync(new CategoryListFilter { Page = 1, PageSize = 2000, IsActive = true }, ct);
+            var allowed = new HashSet<Guid>(categories.Items.Select(c => c.Id));
+            var selected = categoryIds.Where(id => allowed.Contains(id)).Distinct().ToList();
+
+            if (selected.Count == 0)
+            {
+                product.Category = null;
+                product.ProductsLink.Clear();
+                return;
+            }
+
+            var firstCategory = categories.Items.First(c => c.Id == selected[0]);
+            product.Category = firstCategory.Name;
+            product.ProductsLink.Clear();
+            foreach (var id in selected)
+            {
+                product.ProductsLink.Add(new ProductCategory
+                {
+                    ProductId = product.Id,
+                    CategoryId = id
+                });
+            }
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(categoryValue) && Guid.TryParse(categoryValue, out var categoryId))
+        {
+            var category = await _categoryRepo.GetByIdAsync(categoryId, ct);
+            if (category is null)
+            {
+                throw new ValidationException("Categoría no encontrada.");
+            }
+
+            product.Category = category.Name;
+            product.ProductsLink.Clear();
+            product.ProductsLink.Add(new ProductCategory
+            {
+                ProductId = product.Id,
+                CategoryId = category.Id
+            });
+            return;
+        }
+
+        product.ProductsLink.Clear();
+    }
+
+    private async Task EnrichCategoryInfoAsync(ProductDto dto, CancellationToken ct)
+    {
+        if (dto.Categories is { Count: > 0 })
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Category))
+        {
+            if (Guid.TryParse(dto.Category, out var categoryId))
+            {
+                var category = await _categoryRepo.GetByIdAsync(categoryId, ct);
+                if (category != null)
+                {
+                    dto.Category = category.Name;
+                    dto.Categories = new List<ProductCategoryDto>
+                    {
+                        new() { Id = category.Id, Name = category.Name }
+                    };
+                }
+                return;
+            }
+
+            dto.Categories = new List<ProductCategoryDto>
+            {
+                new() { Id = Guid.Empty, Name = dto.Category }
+            };
+        }
     }
 }

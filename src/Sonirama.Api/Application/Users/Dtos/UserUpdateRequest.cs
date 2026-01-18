@@ -6,6 +6,7 @@ public sealed class UserUpdateRequest
     public string FirstName { get; set; } = default!;
     public string LastName { get; set; } = default!;
     public string? PhoneNumber { get; set; }
+    public decimal DiscountPercent { get; set; }
     public string Role { get; set; } = Domain.Enums.Role.User;
     public bool IsActive { get; set; } = true;
 }

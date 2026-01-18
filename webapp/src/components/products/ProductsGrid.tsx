@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProgressSpinner } from 'primereact/progressspinner';
+import { VirtualScroller, type VirtualScrollerLazyEvent } from 'primereact/virtualscroller';
 import { useAppSelector } from '@/store/hooks';
 import { useLazyGetProductsQuery } from '@/store/api/productsApi';
+import { useGetMyProfileQuery } from '@/store/api/usersApi';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { selectFilters } from '@/store/slices/filtersSlice';
 import { ProductCard } from './ProductCard';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,14 +24,13 @@ interface ProductsGridProps {
  */
 export function ProductsGrid({ testId = 'products-grid', mode = 'user' }: ProductsGridProps) {
   const filters = useAppSelector(selectFilters);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const [loadProducts, { isFetching, isLoading, isError, error }] = useLazyGetProductsQuery();
-  const [products, setProducts] = useState<ProductDto[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
+  const { data: profile } = useGetMyProfileQuery(undefined, { skip: mode === 'admin-preview' || !isAuthenticated });
+  const [items, setItems] = useState<Array<ProductDto | null>>([]);
   const [pageSize, setPageSize] = useState(20);
-  const [hasMore, setHasMore] = useState(false);
   const [didLoad, setDidLoad] = useState(false);
-  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [columns, setColumns] = useState(4);
 
   const baseParams = useMemo(
     () => ({
@@ -43,52 +45,55 @@ export function ProductsGrid({ testId = 'products-grid', mode = 'user' }: Produc
     [filters]
   );
 
+  const ensureItemsLength = useCallback((nextTotal: number) => {
+    setItems((prev) => {
+      if (prev.length === nextTotal) return prev;
+      return Array.from({ length: nextTotal }, (_, idx) => prev[idx] ?? null);
+    });
+  }, []);
+
   const loadPage = useCallback(
-    async (pageToLoad: number, replace = false) => {
-      const result = await loadProducts({ ...baseParams, page: pageToLoad, pageSize }).unwrap();
-      setProducts((prev) => {
-        if (replace) return result.items;
-        const existingIds = new Set(prev.map((p) => p.id));
-        const merged = [...prev, ...result.items.filter((p) => !existingIds.has(p.id))];
-        return merged;
-      });
-      setTotalCount(result.totalCount);
+    async (pageToLoad: number, first: number, rows: number) => {
+      const result = await loadProducts({ ...baseParams, page: pageToLoad, pageSize: rows }).unwrap();
       setPageSize(result.pageSize);
-      setCurrentPage(result.page);
-      setHasMore(result.page * result.pageSize < result.totalCount);
+      ensureItemsLength(result.totalCount);
+      setItems((prev) => {
+        const next = prev.length === result.totalCount ? [...prev] : Array(result.totalCount).fill(null);
+        result.items.forEach((item, index) => {
+          next[first + index] = item;
+        });
+        return next;
+      });
       setDidLoad(true);
     },
-    [baseParams, loadProducts, pageSize]
+    [baseParams, ensureItemsLength, loadProducts]
   );
 
   // Load first page on filters change
   useEffect(() => {
-    setProducts([]);
-    setCurrentPage(1);
-    setHasMore(false);
+    setItems([]);
     setDidLoad(false);
-    loadPage(1, true).catch(() => setDidLoad(true));
+    loadPage(1, 0, pageSize).catch(() => setDidLoad(true));
   }, [baseParams, loadPage]);
 
-  // Infinite scroll observer
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    const updateColumns = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setColumns(1);
+      } else if (width < 960) {
+        setColumns(2);
+      } else if (width < 1200) {
+        setColumns(3);
+      } else {
+        setColumns(4);
+      }
+    };
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const [entry] = entries;
-        if (entry.isIntersecting && hasMore && !isFetching && !isLoading) {
-          loadPage(currentPage + 1).catch(() => undefined);
-        }
-      },
-      { rootMargin: '200px' }
-    );
-
-    observer.observe(sentinel);
-
-    return () => observer.disconnect();
-  }, [hasMore, isFetching, isLoading, currentPage, loadPage]);
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
 
   if (!didLoad && isLoading) {
     return (
@@ -120,7 +125,7 @@ export function ProductsGrid({ testId = 'products-grid', mode = 'user' }: Produc
     );
   }
 
-  if (products.length === 0) {
+  if (items.length === 0 && didLoad) {
     return (
       <EmptyState
         testId={`${testId}-empty`}
@@ -131,26 +136,74 @@ export function ProductsGrid({ testId = 'products-grid', mode = 'user' }: Produc
     );
   }
 
-  return (
-    <div id={testId} data-testid={testId} className="flex flex-column gap-3">
-      {/* Products grid */}
-      <div className="grid" data-testid={`${testId}-items`}>
-        {products.map((product) => (
-          <div key={product.id} className="col-12 sm:col-6 md:col-4 lg:col-3">
-            <ProductCard product={product} testId="product-card" mode={mode} />
+  const itemTemplate = (product: ProductDto | null, options: { index: number }) => {
+    if (!product) {
+      return (
+        <div className="p-2">
+          <div className="surface-card border-round p-4" style={{ minHeight: 260 }}>
+            <div className="product-image-placeholder" style={{ height: 180, borderRadius: '8px' }} />
+            <div className="mt-3 h-1rem surface-200 border-round" />
+            <div className="mt-2 h-1rem surface-200 border-round w-6" />
           </div>
-        ))}
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-2">
+        <ProductCard
+          product={product}
+          testId="product-card"
+          mode={mode}
+          userDiscountPercent={profile?.discountPercent ?? 0}
+        />
       </div>
+    );
+  };
 
-      {/* Sentinel for infinite scroll */}
-      <div ref={sentinelRef} />
+  const handleLazyLoad = (event: VirtualScrollerLazyEvent) => {
+    const first = event.first ?? 0;
+    const rows = event.rows ?? pageSize;
+    const page = Math.floor(first / rows) + 1;
 
-      {/* Loading more indicator */}
+    const isLoaded = items[first] !== null && items[first] !== undefined;
+    if (!isLoaded) {
+      loadPage(page, first, rows).catch(() => undefined);
+    }
+  };
+
+  return (
+    <div
+      id={testId}
+      data-testid={testId}
+      className="flex flex-column gap-3 products-virtual-grid"
+      style={{ ['--grid-columns' as string]: String(columns) }}
+    >
+      <VirtualScroller
+        id={`${testId}-items`}
+        data-testid={`${testId}-items`}
+        items={items}
+        itemSize={320}
+        lazy
+        onLazyLoad={handleLazyLoad}
+        className="w-full products-virtual-grid__scroller"
+        style={{ minHeight: '60vh' }}
+        itemTemplate={itemTemplate}
+      />
+
       {isFetching && didLoad && (
         <div className="flex align-items-center justify-content-center py-4" data-testid={`${testId}-loading-more`}>
           <ProgressSpinner style={{ width: '30px', height: '30px' }} strokeWidth="4" />
         </div>
       )}
+
+      <style>{`
+        .products-virtual-grid__scroller .p-virtualscroller-content {
+          display: grid;
+          grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+          gap: 1rem;
+        }
+      `}</style>
     </div>
   );
 }

@@ -17,6 +17,7 @@ public class User
     public string FirstName { get; set; } = default!;
     public string LastName { get; set; } = default!;
     public string? PhoneNumber { get; set; }
+    public decimal DiscountPercent { get; set; }
 
     // Lockout fields
     public int FailedLoginAttempts { get; set; } = 0;

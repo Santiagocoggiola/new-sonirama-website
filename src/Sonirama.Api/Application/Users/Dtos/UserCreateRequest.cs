@@ -9,5 +9,6 @@ public sealed class UserCreateRequest
     public string FirstName { get; set; } = default!;
     public string LastName { get; set; } = default!;
     public string? PhoneNumber { get; set; }
+    public decimal DiscountPercent { get; set; } = 0; // Default value for DiscountPercent
     public string Role { get; set; } = Domain.Enums.Role.User; // default role
 }

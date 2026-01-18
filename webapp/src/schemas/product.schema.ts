@@ -22,6 +22,7 @@ export const productCreateSchema = z.object({
     .length(3, { message: 'La moneda debe tener 3 caracteres (ISO)' })
     .default('ARS'),
   category: z.string().max(100, { message: 'La categoría no puede superar los 100 caracteres' }).optional(),
+  categoryIds: z.array(z.string()).optional(),
   isActive: z.boolean().default(true),
 });
 

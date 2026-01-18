@@ -11,15 +11,15 @@ public sealed class BulkDiscountsController(IBulkDiscountService service) : Cont
 {
     [HttpGet]
     [Authorize(Roles = "ADMIN,USER")]
-    public async Task<IActionResult> ListAsync(Guid productId, CancellationToken ct)
-        => Ok(await service.ListByProductAsync(productId, ct));
+    public async Task<IActionResult> ListAsync(Guid productId, [FromQuery] BulkDiscountListRequest request, CancellationToken ct)
+        => Ok(await service.ListByProductAsync(productId, request, ct));
 
     [HttpPost]
     [Authorize(Roles = "ADMIN")]
     public async Task<IActionResult> CreateAsync(Guid productId, [FromBody] BulkDiscountCreateRequest request, CancellationToken ct)
     {
         var created = await service.CreateAsync(productId, request, ct);
-        return CreatedAtAction(nameof(ListAsync), new { productId }, created);
+        return Ok(created);
     }
 
     [HttpPut("{id:guid}")]

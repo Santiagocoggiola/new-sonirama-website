@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Card } from 'primereact/card';
@@ -10,8 +10,9 @@ import { InputText } from 'primereact/inputtext';
 import { Tag } from 'primereact/tag';
 import { InputSwitch } from 'primereact/inputswitch';
 import { ProgressSpinner } from 'primereact/progressspinner';
-import { Paginator, PaginatorPageChangeEvent } from 'primereact/paginator';
-import { useGetProductsQuery, useUpdateProductMutation } from '@/store/api/productsApi';
+import { Dialog } from 'primereact/dialog';
+import { VirtualScroller, type VirtualScrollerLazyEvent } from 'primereact/virtualscroller';
+import { useLazyGetProductsQuery, useUpdateProductMutation, useDeleteProductMutation } from '@/store/api/productsApi';
 import { useGetCategoriesQuery } from '@/store/api/categoriesApi';
 import { buildAssetUrl, formatPrice, isLocalAssetHost } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -21,15 +22,18 @@ interface AdminProductsCatalogProps {
   testId?: string;
 }
 
-export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: AdminProductsCatalogProps) {
+export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Readonly<AdminProductsCatalogProps>) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ sortBy: 'CreatedAt' | 'Code' | 'Name' | 'Price'; sortDir: 'ASC' | 'DESC' }>(
     { sortBy: 'CreatedAt', sortDir: 'DESC' }
   );
-  const [page, setPage] = useState(1);
   const [rows, setRows] = useState(12);
+  const [items, setItems] = useState<Array<ProductDto | null>>([]);
+  const [didLoad, setDidLoad] = useState(false);
+  const [columns, setColumns] = useState(3);
+  const [productToDelete, setProductToDelete] = useState<ProductDto | null>(null);
 
   const { data: categoriesData, isLoading: isLoadingCategories } = useGetCategoriesQuery({ pageSize: 200, isActive: true });
   const categoryOptions = useMemo(
@@ -40,30 +44,50 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
     [categoriesData]
   );
 
-  const { data, isLoading, isError, isFetching } = useGetProductsQuery({
-    query: search || undefined,
-    categoryIds: categoryId ? [categoryId] : undefined,
-    page,
-    pageSize: rows,
-    sortBy: sort.sortBy,
-    sortDir: sort.sortDir,
-  });
+  const [loadProducts, { isLoading, isFetching, isError }] = useLazyGetProductsQuery();
 
   const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
+  const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
 
-  const products = data?.items ?? [];
-  const total = data?.totalCount ?? 0;
+  const ensureItemsLength = useCallback((nextTotal: number) => {
+    setItems((prev) => {
+      if (prev.length === nextTotal) return prev;
+      return Array.from({ length: nextTotal }, (_, idx) => prev[idx] ?? null);
+    });
+  }, []);
+
+  const loadPage = useCallback(
+    async (pageToLoad: number, first: number, pageSize: number) => {
+      const result = await loadProducts({
+        query: search || undefined,
+        categoryIds: categoryId ? [categoryId] : undefined,
+        page: pageToLoad,
+        pageSize,
+        sortBy: sort.sortBy,
+        sortDir: sort.sortDir,
+      }).unwrap();
+
+      setRows(result.pageSize);
+      ensureItemsLength(result.totalCount);
+      setItems((prev) => {
+        const next = prev.length === result.totalCount ? [...prev] : Array(result.totalCount).fill(null);
+        result.items.forEach((item, index) => {
+          next[first + index] = item;
+        });
+        return next;
+      });
+      setDidLoad(true);
+    },
+    [categoryId, ensureItemsLength, loadProducts, search, sort.sortBy, sort.sortDir]
+  );
 
   const handleEdit = useCallback((product: ProductDto) => {
     router.push(`/admin/products/${product.id}`);
   }, [router]);
 
-  const handlePage = useCallback((event: { page: number; rows: number }) => {
-    setRows(event.rows);
-    setPage(event.page + 1);
-  }, []);
 
   const handleToggleActive = useCallback(async (product: ProductDto, value: boolean) => {
+    setItems((prev) => prev.map((item) => (item?.id === product.id ? { ...item, isActive: value } : item)));
     try {
       await updateProduct({
         id: product.id,
@@ -77,16 +101,23 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
         },
       }).unwrap();
     } catch {
+      setItems((prev) => prev.map((item) => (item?.id === product.id ? { ...item, isActive: product.isActive } : item)));
       // toast handled globally? keep silent here
     }
   }, [updateProduct]);
 
-  const itemTemplate = useCallback((product: ProductDto) => {
+  const itemTemplate = useCallback((product: ProductDto, index: number) => {
     if (!product) return null;
     const imageSrc = buildAssetUrl(product.images?.[0]?.url);
+    const isAboveTheFold = index < 3;
+    const categories = product.categories && product.categories.length > 0
+      ? product.categories.map((cat) => cat.name)
+      : product.category && !/^[0-9a-fA-F-]{36}$/.test(product.category)
+        ? [product.category]
+        : [];
 
     return (
-      <div className="admin-card-wrapper">
+      <div className="admin-card-wrapper" key={product.id}>
         <Card
           className="h-full shadow-2 border-round-lg overflow-hidden"
           pt={{ content: { className: 'p-0' } }}
@@ -97,11 +128,12 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
                 <Image
                   src={imageSrc}
                   alt={product.name}
-                  width={700}
-                  height={600}
                   unoptimized={isLocalAssetHost}
                   className="product-admin-card__img"
                   sizes="(max-width: 768px) 100vw, 400px"
+                  fill
+                  loading={isAboveTheFold ? 'eager' : 'lazy'}
+                  fetchPriority={isAboveTheFold ? 'high' : 'auto'}
                   style={{ objectFit: 'contain' }}
                 />
               ) : (
@@ -115,7 +147,20 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
 
             <div className="p-3 flex flex-column gap-2">
               <h3 className="m-0 text-base font-semibold line-clamp-2">{product.name}</h3>
-              <span className="text-color-secondary text-sm">{product.category || 'Sin categoría'}</span>
+              {categories.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {categories.map((category) => (
+                    <Tag key={`${product.id}-${category}`} value={category} severity="info" className="text-xs" />
+                  ))}
+                </div>
+              ) : (
+                <span className="text-color-secondary text-sm">Sin categoría</span>
+              )}
+              {product.description && (
+                <p className="m-0 text-color-secondary text-sm line-clamp-2">
+                  {product.description}
+                </p>
+              )}
               <span className="text-2xl font-bold text-primary">{formatPrice(product.price)}</span>
 
               <div className="product-admin-card__footer">
@@ -127,15 +172,24 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
                     onChange={(e) => handleToggleActive(product, e.value)}
                     disabled={isUpdating}
                   />
+                  <div className="flex align-items-center gap-2">
+                    <Button
+                      type="button"
+                      label="Editar"
+                      icon="pi pi-pencil"
+                      size="small"
+                      className="product-admin-card__edit"
+                      onClick={() => handleEdit(product)}
+                    />
+                    <Button
+                      type="button"
+                      icon="pi pi-trash"
+                      text
+                      severity="danger"
+                      onClick={() => setProductToDelete(product)}
+                    />
+                  </div>
                 </div>
-                <Button
-                  type="button"
-                  label="Editar"
-                  icon="pi pi-pencil"
-                  size="small"
-                  className="product-admin-card__edit"
-                  onClick={() => handleEdit(product)}
-                />
               </div>
             </div>
           </div>
@@ -144,7 +198,32 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
     );
   }, [handleEdit, handleToggleActive, isUpdating]);
 
-  if (isLoading && !data) {
+  useEffect(() => {
+    setItems([]);
+    setDidLoad(false);
+    loadPage(1, 0, rows).catch(() => setDidLoad(true));
+  }, [categoryId, loadPage, rows, search, sort.sortBy, sort.sortDir]);
+
+  useEffect(() => {
+    const updateColumns = () => {
+      const width = window.innerWidth;
+      if (width < 640) {
+        setColumns(1);
+      } else if (width < 960) {
+        setColumns(2);
+      } else if (width < 1280) {
+        setColumns(3);
+      } else {
+        setColumns(4);
+      }
+    };
+
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
+
+  if (isLoading && !didLoad) {
     return (
       <div className="flex align-items-center justify-content-center py-6" data-testid={`${testId}-loading`}>
         <ProgressSpinner style={{ width: '50px', height: '50px' }} strokeWidth="4" />
@@ -179,30 +258,32 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
         <Card className="shadow-1 admin-filters" pt={{ content: { className: 'p-3' } }}>
           <div className="filters-grid">
             <div className="flex flex-column gap-2">
-              <label className="font-medium">Buscar</label>
+              <label className="font-medium" htmlFor={`${testId}-search-input`}>Buscar</label>
               <InputText
+                id={`${testId}-search-input`}
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onChange={(e) => { setSearch(e.target.value); }}
                 placeholder="Nombre o código"
                 data-testid={`${testId}-search`}
               />
             </div>
 
             <div className="flex flex-column gap-2">
-              <label className="font-medium">Categoría</label>
+              <label className="font-medium" htmlFor={`${testId}-category-input`}>Categoría</label>
               <Dropdown
                 value={categoryId}
                 options={categoryOptions}
-                onChange={(e) => { setCategoryId(e.value); setPage(1); }}
+                onChange={(e) => { setCategoryId(e.value); }}
                 placeholder="Todas"
                 loading={isLoadingCategories}
                 className="w-full"
+                inputId={`${testId}-category-input`}
                 data-testid={`${testId}-category`}
               />
             </div>
 
             <div className="flex flex-column gap-2">
-              <label className="font-medium">Ordenar por</label>
+              <label className="font-medium" htmlFor={`${testId}-sort-input`}>Ordenar por</label>
               <Dropdown
                 value={sort}
                 options={[
@@ -214,8 +295,9 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
                   { label: 'Código', value: { sortBy: 'Code', sortDir: 'ASC' as const } },
                 ]}
                 optionLabel="label"
-                onChange={(e) => { setSort(e.value); setPage(1); }}
+                onChange={(e) => { setSort(e.value); }}
                 className="w-full"
+                inputId={`${testId}-sort-input`}
                 data-testid={`${testId}-sort`}
               />
             </div>
@@ -228,14 +310,14 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
                 outlined
                 severity="secondary"
                 className="w-full"
-                onClick={() => { setSearch(''); setCategoryId(null); setSort({ sortBy: 'CreatedAt', sortDir: 'DESC' }); setPage(1); }}
+                onClick={() => { setSearch(''); setCategoryId(null); setSort({ sortBy: 'CreatedAt', sortDir: 'DESC' }); }}
                 data-testid={`${testId}-clear`}
               />
             </div>
           </div>
         </Card>
 
-        {products.length === 0 ? (
+        {items.length === 0 && didLoad ? (
           <EmptyState
             testId={`${testId}-empty`}
             icon="pi pi-box"
@@ -245,24 +327,61 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
           />
         ) : (
           <>
-            <div className="admin-grid" data-testid={`${testId}-grid`}>
-              {products.map((product) => itemTemplate(product))}
-            </div>
-            <div className="flex justify-content-end mt-3">
-              <Paginator
-                first={(page - 1) * rows}
-                rows={rows}
-                totalRecords={total}
-                rowsPerPageOptions={[12, 24, 48]}
-                onPageChange={(e: PaginatorPageChangeEvent) => handlePage({ page: e.page, rows: e.rows })}
-                template="PrevPageLink PageLinks NextPageLink RowsPerPageDropdown"
+            <div
+              className="admin-virtual-grid"
+              style={{ ['--grid-columns' as string]: String(columns) }}
+            >
+              <VirtualScroller
+                id={`${testId}-grid`}
+                data-testid={`${testId}-grid`}
+                items={items}
+                itemSize={340}
+                lazy
+                onLazyLoad={(event: VirtualScrollerLazyEvent) => {
+                  const first = event.first ?? 0;
+                  const pageSize = event.rows ?? rows;
+                  const page = Math.floor(first / pageSize) + 1;
+                  const isLoaded = items[first] !== null && items[first] !== undefined;
+                  if (!isLoaded) {
+                    loadPage(page, first, pageSize).catch(() => undefined);
+                  }
+                }}
+                className="w-full admin-virtual-grid__scroller"
+                style={{ height: '70vh' }}
+                itemTemplate={(product, options) => {
+                  if (!product) {
+                    return (
+                      <div className="admin-card-wrapper">
+                        <Card className="h-full shadow-2 border-round-lg overflow-hidden" pt={{ content: { className: 'p-4' } }}>
+                          <div className="product-image-placeholder" style={{ height: 200, borderRadius: '10px' }} />
+                          <div className="mt-3 h-1rem surface-200 border-round" />
+                          <div className="mt-2 h-1rem surface-200 border-round w-6" />
+                        </Card>
+                      </div>
+                    );
+                  }
+
+                  return itemTemplate(product, options.index);
+                }}
               />
             </div>
+
+            {isFetching && didLoad && (
+              <div className="flex align-items-center justify-content-center py-4" data-testid={`${testId}-loading-more`}>
+                <ProgressSpinner style={{ width: '30px', height: '30px' }} strokeWidth="4" />
+              </div>
+            )}
           </>
         )}
       </main>
 
-      <style jsx>{`
+      <style>{`
+        .admin-virtual-grid__scroller .p-virtualscroller-content {
+          display: grid;
+          grid-template-columns: repeat(var(--grid-columns), minmax(320px, 1fr));
+          gap: 1.5rem;
+          width: 100%;
+        }
         .admin-products-page {
           display: flex;
           flex-direction: column;
@@ -313,17 +432,14 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
         .product-admin-card__image {
           position: relative;
           width: 100%;
-          height: 280px;
-          max-height: 320px;
+          height: auto;
+          min-height: 240px;
           aspect-ratio: 4 / 3;
           overflow: hidden;
           background: var(--surface-50);
         }
         .product-admin-card__img {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
+          object-fit: contain;
         }
         .product-admin-card__badges {
           position: absolute;
@@ -338,10 +454,17 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
           align-items: center;
           justify-content: space-between;
           gap: 0.75rem;
+          flex-wrap: wrap;
           margin-top: 0.75rem;
         }
         .product-admin-card__edit {
           min-width: 7rem;
+        }
+
+        @media (max-width: 420px) {
+          .product-admin-card__edit {
+            width: 100%;
+          }
         }
         .product-image-placeholder {
           width: 100%;
@@ -366,6 +489,37 @@ export function AdminProductsCatalog({ testId = 'admin-products-catalog' }: Admi
           }
         }
       `}</style>
+
+      <Dialog
+        header="Eliminar producto"
+        visible={!!productToDelete}
+        onHide={() => setProductToDelete(null)}
+        modal
+        className="w-full sm:w-26rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button label="Cancelar" outlined onClick={() => setProductToDelete(null)} />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              loading={isDeleting}
+              onClick={async () => {
+                if (!productToDelete) return;
+                try {
+                  await deleteProduct(productToDelete.id).unwrap();
+                  setItems((prev) => prev.filter((item) => item?.id !== productToDelete.id));
+                  setDidLoad(false);
+                  await loadPage(1, 0, rows);
+                } finally {
+                  setProductToDelete(null);
+                }
+              }}
+            />
+          </div>
+        )}
+      >
+        <p className="m-0">¿Seguro que querés eliminar el producto "{productToDelete?.name}"?</p>
+      </Dialog>
     </div>
   );
 }

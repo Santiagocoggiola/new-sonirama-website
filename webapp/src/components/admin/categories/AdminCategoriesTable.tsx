@@ -168,7 +168,16 @@ export function AdminCategoriesTable({ testId = 'admin-categories-table' }: Admi
       {categories.length === 0 ? (
         <EmptyState testId={`${testId}-empty`} icon="pi pi-tags" title="No hay categorías" message="Creá tu primera categoría." action={{ label: 'Crear categoría', onClick: () => openDialog() }} />
       ) : (
-        <DataTable value={categories} dataKey="id" className="surface-card border-round" stripedRows>
+        <DataTable
+          value={categories}
+          dataKey="id"
+          paginator
+          rows={10}
+          rowsPerPageOptions={[10, 25, 50]}
+          className="surface-card border-round"
+          stripedRows
+          responsiveLayout="scroll"
+        >
           <Column field="name" header="Nombre" sortable />
           <Column field="description" header="Descripción" />
           <Column field="isActive" header="Estado" body={statusTemplate} />

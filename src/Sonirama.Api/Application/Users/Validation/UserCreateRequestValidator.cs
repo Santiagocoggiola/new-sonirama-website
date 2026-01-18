@@ -17,6 +17,9 @@ public sealed class UserCreateRequestValidator : AbstractValidator<UserCreateReq
             .NotEmpty().MaximumLength(100);
         RuleFor(x => x.PhoneNumber)
             .MaximumLength(32).When(x => !string.IsNullOrWhiteSpace(x.PhoneNumber));
+
+        RuleFor(x => x.DiscountPercent)
+            .InclusiveBetween(0, 100).WithMessage("El descuento debe estar entre 0 y 100.");
         RuleFor(x => x.Role)
             .Must(Role.IsValid).WithMessage("Invalid role.");
     }

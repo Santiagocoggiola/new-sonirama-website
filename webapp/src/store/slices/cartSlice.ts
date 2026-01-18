@@ -4,6 +4,9 @@ import type { CartDto, CartItemDto } from '@/types';
 interface CartState {
   id: string | null;
   items: CartItemDto[];
+  subtotal: number;
+  discountTotal: number;
+  userDiscountPercent: number;
   total: number;
   isLoading: boolean;
   error: string | null;
@@ -13,6 +16,9 @@ interface CartState {
 const initialState: CartState = {
   id: null,
   items: [],
+  subtotal: 0,
+  discountTotal: 0,
+  userDiscountPercent: 0,
   total: 0,
   isLoading: false,
   error: null,
@@ -26,6 +32,9 @@ const cartSlice = createSlice({
     setCart: (state, action: PayloadAction<CartDto>) => {
       state.id = action.payload.id;
       state.items = [...action.payload.items].sort((a, b) => (a.productCode || '').localeCompare(b.productCode || ''));
+      state.subtotal = action.payload.subtotal;
+      state.discountTotal = action.payload.discountTotal;
+      state.userDiscountPercent = action.payload.userDiscountPercent;
       state.total = action.payload.total;
       state.updatedAtUtc = action.payload.updatedAtUtc;
       state.error = null;
@@ -39,6 +48,9 @@ const cartSlice = createSlice({
     clearCart: (state) => {
       state.id = null;
       state.items = [];
+      state.subtotal = 0;
+      state.discountTotal = 0;
+      state.userDiscountPercent = 0;
       state.total = 0;
       state.updatedAtUtc = null;
       state.error = null;
@@ -53,14 +65,18 @@ const cartSlice = createSlice({
         state.items.push(action.payload);
       }
       // Recalculate total
+      state.subtotal = state.items.reduce((sum, item) => sum + item.unitPriceBase * item.quantity, 0);
       state.total = state.items.reduce((sum, item) => sum + item.lineTotal, 0);
+      state.discountTotal = state.subtotal - state.total;
     },
     removeCartItem: (state, action: PayloadAction<string>) => {
       state.items = state.items.filter(
         (item) => item.productId !== action.payload
       );
       // Recalculate total
+      state.subtotal = state.items.reduce((sum, item) => sum + item.unitPriceBase * item.quantity, 0);
       state.total = state.items.reduce((sum, item) => sum + item.lineTotal, 0);
+      state.discountTotal = state.subtotal - state.total;
     },
   },
 });

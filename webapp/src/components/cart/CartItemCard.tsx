@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { Button } from 'primereact/button';
 import { InputNumber } from 'primereact/inputnumber';
+import { Dialog } from 'primereact/dialog';
 import { useCart } from '@/hooks/useCart';
 import { formatPrice, buildAssetUrl } from '@/lib/utils';
 import { useGetProductByIdQuery } from '@/store/api/productsApi';
@@ -22,6 +24,7 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
   const cardId = `${testId}-${item.productId}`;
   const { data: product } = useGetProductByIdQuery(item.productId);
   const primaryImage = product?.images?.find((img) => (img as { isPrimary?: boolean }).isPrimary) || product?.images?.[0];
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 
   const handleQuantityChange = async (value: number | null) => {
     if (value && value > 0) {
@@ -128,7 +131,7 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
             text
             rounded
             severity="danger"
-            onClick={handleRemove}
+            onClick={() => setConfirmRemoveOpen(true)}
             loading={isLoading}
             aria-label="Eliminar producto"
             tooltip="Eliminar"
@@ -146,6 +149,30 @@ export function CartItemCard({ item, testId = 'cart-item' }: CartItemCardProps) 
           {formatPrice(item.lineTotal)}
         </span>
       </div>
+
+      <Dialog
+        header="Eliminar producto"
+        visible={confirmRemoveOpen}
+        onHide={() => setConfirmRemoveOpen(false)}
+        modal
+        className="w-full sm:w-26rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button label="Cancelar" outlined onClick={() => setConfirmRemoveOpen(false)} />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              loading={isLoading}
+              onClick={async () => {
+                await handleRemove();
+                setConfirmRemoveOpen(false);
+              }}
+            />
+          </div>
+        )}
+      >
+        <p className="m-0">¿Eliminar este producto del carrito?</p>
+      </Dialog>
     </div>
   );
 }

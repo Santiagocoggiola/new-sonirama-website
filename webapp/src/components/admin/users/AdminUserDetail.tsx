@@ -10,10 +10,12 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
+import { InputNumber } from 'primereact/inputnumber';
 import { useGetUserByIdQuery, useUpdateUserMutation, useForcePasswordResetMutation, useDeleteUserMutation } from '@/store/api/usersApi';
 import { formatDateTime } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { showToast } from '@/components/ui/toast-service';
+import type { UserDto } from '@/types/user';
 
 interface AdminUserDetailProps {
   userId: string;
@@ -32,6 +34,7 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
     firstName: '',
     lastName: '',
     phoneNumber: '',
+    discountPercent: 0,
     role: 'USER' as UserDto['role'],
   });
 
@@ -41,6 +44,7 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
         firstName: user.firstName ?? '',
         lastName: user.lastName ?? '',
         phoneNumber: user.phoneNumber ?? '',
+        discountPercent: user.discountPercent ?? 0,
         role: user.role,
       });
     }
@@ -55,6 +59,7 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
           firstName: user.firstName ?? '',
           lastName: user.lastName ?? '',
           phoneNumber: user.phoneNumber ?? undefined,
+          discountPercent: user.discountPercent ?? 0,
           role: user.role,
           isActive: !user.isActive,
         },
@@ -91,6 +96,7 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
       firstName: user.firstName ?? '',
       lastName: user.lastName ?? '',
       phoneNumber: user.phoneNumber ?? '',
+      discountPercent: user.discountPercent ?? 0,
       role: user.role,
     });
   };
@@ -109,6 +115,7 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
           firstName: formValues.firstName.trim(),
           lastName: formValues.lastName.trim(),
           phoneNumber: formValues.phoneNumber?.trim() || undefined,
+          discountPercent: formValues.discountPercent ?? 0,
           role: formValues.role,
           isActive: user.isActive,
         },
@@ -185,6 +192,16 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
                   />
                 </div>
                 <div className="flex flex-column gap-1">
+                  <span className="text-color-secondary text-sm">Descuento (%)</span>
+                  <InputNumber
+                    value={formValues.discountPercent}
+                    onValueChange={(e) => setFormValues((prev) => ({ ...prev, discountPercent: Number(e.value ?? 0) }))}
+                    min={0}
+                    max={100}
+                    suffix="%"
+                  />
+                </div>
+                <div className="flex flex-column gap-1">
                   <span className="text-color-secondary text-sm">Rol</span>
                   <Dropdown
                     value={formValues.role}
@@ -224,6 +241,10 @@ export function AdminUserDetail({ userId, testId = 'admin-user-detail' }: AdminU
                 <div className="flex flex-column gap-1">
                   <span className="text-color-secondary text-sm">Teléfono</span>
                   <span className="font-medium">{user.phoneNumber || '-'}</span>
+                </div>
+                <div className="flex flex-column gap-1">
+                  <span className="text-color-secondary text-sm">Descuento (%)</span>
+                  <span className="font-medium">{user.discountPercent ?? 0}%</span>
                 </div>
                 <div className="flex flex-column gap-1">
                   <span className="text-color-secondary text-sm">Rol</span>

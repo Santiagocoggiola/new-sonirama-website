@@ -8,6 +8,7 @@ public sealed class CartItemDto
     public int Quantity { get; set; }
     public decimal UnitPriceBase { get; set; }
     public decimal DiscountPercent { get; set; }
+    public decimal UserDiscountPercent { get; set; }
     public decimal UnitPriceWithDiscount { get; set; }
     public decimal LineTotal { get; set; }
     public int? MinBulkQuantityApplied { get; set; }

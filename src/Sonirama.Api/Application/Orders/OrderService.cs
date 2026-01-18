@@ -11,13 +11,15 @@ namespace Sonirama.Api.Application.Orders;
 public sealed class OrderService(ICartRepository cartRepository,
                                  IOrderRepository orderRepository,
                                  IOrderNotificationService notificationService,
-                                 IProductRepository productRepository) : IOrderService
+                                 IProductRepository productRepository,
+                                 IUserRepository userRepository) : IOrderService
 {
     private const string OrderNotFoundMessage = "Pedido no encontrado";
     private readonly ICartRepository _cartRepository = cartRepository;
     private readonly IOrderRepository _orderRepository = orderRepository;
     private readonly IOrderNotificationService _notifications = notificationService;
     private readonly IProductRepository _productRepository = productRepository;
+    private readonly IUserRepository _userRepository = userRepository;
 
     public async Task<OrderDto> CreateFromCartAsync(Guid userId, CancellationToken ct)
     {
@@ -26,6 +28,9 @@ public sealed class OrderService(ICartRepository cartRepository,
         {
             throw new ValidationException("El carrito está vacío. Agregá productos antes de generar un pedido.");
         }
+
+        var user = await _userRepository.GetByIdAsync(userId, ct);
+        var userDiscountPercent = user?.DiscountPercent ?? 0m;
 
         var firstProduct = cart.Items.First().Product ?? throw new InvalidOperationException("El carrito contiene un producto inválido.");
         var currency = firstProduct.Currency;
@@ -39,6 +44,7 @@ public sealed class OrderService(ICartRepository cartRepository,
             UserId = userId,
             Status = OrderStatus.PendingApproval,
             Currency = currency,
+            UserDiscountPercent = userDiscountPercent,
             CreatedAtUtc = DateTime.UtcNow,
             UpdatedAtUtc = DateTime.UtcNow
         };
@@ -50,7 +56,7 @@ public sealed class OrderService(ICartRepository cartRepository,
                 throw new InvalidOperationException("El carrito tiene un producto inválido.");
             }
 
-            var mapped = MapCartItemToOrderItem(item);
+            var mapped = MapCartItemToOrderItem(item, userDiscountPercent);
             order.Items.Add(mapped);
         }
 
@@ -138,6 +144,32 @@ public sealed class OrderService(ICartRepository cartRepository,
         order.Status = OrderStatus.Cancelled;
         order.CancelledAtUtc = DateTime.UtcNow;
     order.CancellationReason = request.Reason.Trim();
+        order.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _orderRepository.UpdateAsync(order, ct);
+        var dto = await MapOrderAsync(order, ct);
+        await _notifications.NotifyUpdatedAsync(dto, ct);
+        return dto;
+    }
+
+    public async Task<OrderDto> CancelByAdminAsync(Guid orderId, Guid adminUserId, OrderCancelRequest request, CancellationToken ct)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new ValidationException("Debés indicar el motivo de cancelación.");
+        }
+
+        var order = await _orderRepository.GetDetailedByIdAsync(orderId, ct) ?? throw new NotFoundException(OrderNotFoundMessage);
+        EnsureAdmin(adminUserId);
+
+        if (order.Status == OrderStatus.Cancelled)
+        {
+            throw new ValidationException("El pedido ya está cancelado.");
+        }
+
+        order.Status = OrderStatus.Cancelled;
+        order.CancelledAtUtc = DateTime.UtcNow;
+        order.CancellationReason = request.Reason.Trim();
         order.UpdatedAtUtc = DateTime.UtcNow;
 
         await _orderRepository.UpdateAsync(order, ct);
@@ -356,7 +388,7 @@ public sealed class OrderService(ICartRepository cartRepository,
         return dto;
     }
 
-    private static OrderItem MapCartItemToOrderItem(Domain.Entities.CartItem item)
+    private static OrderItem MapCartItemToOrderItem(Domain.Entities.CartItem item, decimal userDiscountPercent)
     {
         var product = item.Product ?? throw new InvalidOperationException("El item del carrito no tiene producto");
         var now = DateTime.UtcNow;
@@ -366,7 +398,8 @@ public sealed class OrderService(ICartRepository cartRepository,
             .OrderByDescending(d => d.DiscountPercent)
             .FirstOrDefault();
 
-        var discountPercent = discount?.DiscountPercent ?? 0m;
+        var bulkDiscountPercent = discount?.DiscountPercent ?? 0m;
+        var discountPercent = 100m * (1 - (1 - (bulkDiscountPercent / 100m)) * (1 - (userDiscountPercent / 100m)));
         var unitPrice = product.Price;
         var unitPriceWithDiscount = unitPrice * (1 - (discountPercent / 100m));
         var lineTotal = unitPriceWithDiscount * item.Quantity;
@@ -420,6 +453,7 @@ public sealed class OrderService(ICartRepository cartRepository,
     private async Task<OrderDto> MapOrderAsync(Order order, CancellationToken ct)
     {
         var imageMap = await LoadPrimaryImagesAsync(order.Items.Select(i => i.ProductId), ct);
+        var user = await _userRepository.GetByIdAsync(order.UserId, ct);
 
         return new OrderDto
         {
@@ -427,6 +461,8 @@ public sealed class OrderService(ICartRepository cartRepository,
             Number = order.Number,
             Status = order.Status,
             UserId = order.UserId,
+            UserPhoneNumber = user?.PhoneNumber,
+            UserDiscountPercent = order.UserDiscountPercent,
             Subtotal = order.Subtotal,
             DiscountTotal = order.DiscountTotal,
             Total = order.Total,

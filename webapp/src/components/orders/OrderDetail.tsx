@@ -1,15 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
+import { useState } from 'react';
 import { Button } from 'primereact/button';
 import { Card } from 'primereact/card';
 import { Tag } from 'primereact/tag';
 import { Divider } from 'primereact/divider';
 import { Timeline } from 'primereact/timeline';
 import { Skeleton } from 'primereact/skeleton';
+import { Dialog } from 'primereact/dialog';
+import { InputTextarea } from 'primereact/inputtextarea';
 import {
   useGetOrderQuery,
+  useConfirmOrderMutation,
   useAcceptModificationsMutation,
   useRejectModificationsMutation,
   useCancelOrderMutation,
@@ -41,6 +44,14 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
   const [acceptMods, { isLoading: isAccepting }] = useAcceptModificationsMutation();
   const [rejectMods, { isLoading: isRejecting }] = useRejectModificationsMutation();
   const [cancelOrder, { isLoading: isCancelling }] = useCancelOrderMutation();
+  const [confirmOrder, { isLoading: isConfirming }] = useConfirmOrderMutation();
+
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmNote, setConfirmNote] = useState('');
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
 
   const handleGoBack = () => {
     router.back();
@@ -201,12 +212,56 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
                 </span>
               </div>
 
-              {order.bulkDiscountAmount > 0 && (
+              {order.discountTotal > 0 && (
                 <div className="flex justify-content-between text-green-600">
                   <span>Descuento</span>
                   <span data-testid={`${testId}-discount`}>
-                    -{formatPrice(order.bulkDiscountAmount)}
+                    -{formatPrice(order.discountTotal)}
                   </span>
+                </div>
+              )}
+
+              {order.userDiscountPercent > 0 && (
+                <div className="flex justify-content-between text-color-secondary">
+                  <span>Descuento cliente</span>
+                  <span data-testid={`${testId}-user-discount`}>
+                    {order.userDiscountPercent}%
+                  </span>
+                </div>
+              )}
+
+              {(order.cancellationReason || order.modificationReason || order.rejectionReason || order.adminNotes || order.userNotes) && (
+                <div className="flex flex-column gap-2 text-sm surface-50 border-round p-2">
+                  {order.cancellationReason && (
+                    <div className="flex flex-column">
+                      <span className="text-color-secondary">Motivo de cancelación</span>
+                      <span>{order.cancellationReason}</span>
+                    </div>
+                  )}
+                  {order.modificationReason && (
+                    <div className="flex flex-column">
+                      <span className="text-color-secondary">Motivo de modificación</span>
+                      <span>{order.modificationReason}</span>
+                    </div>
+                  )}
+                  {order.rejectionReason && (
+                    <div className="flex flex-column">
+                      <span className="text-color-secondary">Motivo de rechazo</span>
+                      <span>{order.rejectionReason}</span>
+                    </div>
+                  )}
+                  {order.adminNotes && (
+                    <div className="flex flex-column">
+                      <span className="text-color-secondary">Notas admin</span>
+                      <span>{order.adminNotes}</span>
+                    </div>
+                  )}
+                  {order.userNotes && (
+                    <div className="flex flex-column">
+                      <span className="text-color-secondary">Notas del cliente</span>
+                      <span>{order.userNotes}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -235,6 +290,9 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
               orderId={order.id}
               status={order.status}
               testId={`${testId}-actions`}
+              onConfirm={async () => {
+                setConfirmDialogOpen(true);
+              }}
               onAcceptMods={async () => {
                 try {
                   await acceptMods({ id: order.id }).unwrap();
@@ -244,25 +302,12 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
                 }
               }}
               onRejectMods={async () => {
-                const reason = prompt('Motivo del rechazo de cambios:');
-                if (!reason) return;
-                try {
-                  await rejectMods({ id: order.id, body: { reason } }).unwrap();
-                  showToast({ severity: 'success', summary: 'Cambios rechazados' });
-                } catch {
-                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo rechazar los cambios' });
-                }
+                setRejectDialogOpen(true);
               }}
               onCancel={async () => {
-                const reason = prompt('Motivo de cancelación:');
-                if (!reason) return;
-                try {
-                  await cancelOrder({ id: order.id, body: { reason } }).unwrap();
-                  showToast({ severity: 'success', summary: 'Pedido cancelado' });
-                } catch {
-                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo cancelar el pedido' });
-                }
+                setCancelDialogOpen(true);
               }}
+              isConfirming={isConfirming}
               isAccepting={isAccepting}
               isRejecting={isRejecting}
               isCancelling={isCancelling}
@@ -270,6 +315,166 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
           </Card>
         </div>
       </div>
+
+      <Dialog
+        header="Confirmar pedido"
+        visible={confirmDialogOpen}
+        onHide={() => {
+          setConfirmDialogOpen(false);
+          setConfirmNote('');
+        }}
+        modal
+        className="w-full sm:w-30rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button
+              label="Cancelar"
+              outlined
+              onClick={() => {
+                setConfirmDialogOpen(false);
+                setConfirmNote('');
+              }}
+            />
+            <Button
+              label="Aceptar"
+              loading={isConfirming}
+              onClick={async () => {
+                try {
+                  await confirmOrder({ id: order.id, body: confirmNote.trim() ? { note: confirmNote.trim() } : undefined }).unwrap();
+                  showToast({ severity: 'success', summary: 'Pedido confirmado' });
+                  setConfirmDialogOpen(false);
+                  setConfirmNote('');
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo confirmar el pedido' });
+                }
+              }}
+            />
+          </div>
+        )}
+      >
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-confirm-note`} className="text-sm text-color-secondary">
+            Nota (opcional)
+          </label>
+          <InputTextarea
+            id={`${testId}-confirm-note`}
+            value={confirmNote}
+            onChange={(e) => setConfirmNote(e.target.value)}
+            autoResize
+            rows={3}
+          />
+        </div>
+      </Dialog>
+
+      <Dialog
+        header="Rechazar cambios"
+        visible={rejectDialogOpen}
+        onHide={() => {
+          setRejectDialogOpen(false);
+          setRejectReason('');
+        }}
+        modal
+        className="w-full sm:w-30rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button
+              label="Cancelar"
+              outlined
+              onClick={() => {
+                setRejectDialogOpen(false);
+                setRejectReason('');
+              }}
+            />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              loading={isRejecting}
+              onClick={async () => {
+                if (!rejectReason.trim()) {
+                  showToast({ severity: 'warn', summary: 'Falta motivo', detail: 'Indicá el motivo del rechazo' });
+                  return;
+                }
+                try {
+                  await rejectMods({ id: order.id, body: { reason: rejectReason.trim() } }).unwrap();
+                  showToast({ severity: 'success', summary: 'Cambios rechazados' });
+                  setRejectDialogOpen(false);
+                  setRejectReason('');
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo rechazar los cambios' });
+                }
+              }}
+            />
+          </div>
+        )}
+      >
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-reject-reason`} className="text-sm text-color-secondary">
+            Motivo
+          </label>
+          <InputTextarea
+            id={`${testId}-reject-reason`}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            autoResize
+            rows={3}
+          />
+        </div>
+      </Dialog>
+
+      <Dialog
+        header="Cancelar pedido"
+        visible={cancelDialogOpen}
+        onHide={() => {
+          setCancelDialogOpen(false);
+          setCancelReason('');
+        }}
+        modal
+        className="w-full sm:w-30rem"
+        footer={(
+          <div className="flex justify-content-end gap-2">
+            <Button
+              label="Cancelar"
+              outlined
+              onClick={() => {
+                setCancelDialogOpen(false);
+                setCancelReason('');
+              }}
+            />
+            <Button
+              label="Aceptar"
+              severity="danger"
+              loading={isCancelling}
+              onClick={async () => {
+                if (!cancelReason.trim()) {
+                  showToast({ severity: 'warn', summary: 'Falta motivo', detail: 'Indicá el motivo de la cancelación' });
+                  return;
+                }
+                try {
+                  await cancelOrder({ id: order.id, body: { reason: cancelReason.trim() } }).unwrap();
+                  showToast({ severity: 'success', summary: 'Pedido cancelado' });
+                  setCancelDialogOpen(false);
+                  setCancelReason('');
+                } catch {
+                  showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo cancelar el pedido' });
+                }
+              }}
+            />
+          </div>
+        )}
+      >
+        <div className="flex flex-column gap-2">
+          <label htmlFor={`${testId}-cancel-reason`} className="text-sm text-color-secondary">
+            Motivo
+          </label>
+          <InputTextarea
+            id={`${testId}-cancel-reason`}
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            autoResize
+            rows={3}
+          />
+        </div>
+      </Dialog>
     </div>
   );
 }
@@ -277,9 +482,11 @@ export function OrderDetail({ orderId, testId = 'order-detail' }: OrderDetailPro
 function OrderActions({
   orderId,
   status,
+  onConfirm,
   onAcceptMods,
   onRejectMods,
   onCancel,
+  isConfirming,
   isAccepting,
   isRejecting,
   isCancelling,
@@ -287,19 +494,22 @@ function OrderActions({
 }: {
   orderId: string;
   status: string;
+  onConfirm: () => Promise<void>;
   onAcceptMods: () => Promise<void>;
   onRejectMods: () => Promise<void>;
   onCancel: () => Promise<void>;
+  isConfirming: boolean;
   isAccepting: boolean;
   isRejecting: boolean;
   isCancelling: boolean;
   testId: string;
 }) {
   const isModPending = status === 'ModificationPending';
+  const canConfirm = status === 'Approved';
   const canCancel =
     status === 'PendingApproval' || status === 'Approved' || status === 'ModificationPending' || status === 'Confirmed';
 
-  if (!isModPending && !canCancel) {
+  if (!isModPending && !canConfirm && !canCancel) {
     return <p className="text-color-secondary m-0">No hay acciones disponibles para este pedido.</p>;
   }
 
@@ -327,6 +537,18 @@ function OrderActions({
             outlined
           />
         </div>
+      )}
+
+      {canConfirm && (
+        <Button
+          id={`${testId}-confirm`}
+          data-testid={`${testId}-confirm`}
+          label="Confirmar pedido"
+          icon="pi pi-check"
+          severity="success"
+          onClick={onConfirm}
+          loading={isConfirming}
+        />
       )}
 
       {canCancel && (
@@ -374,22 +596,20 @@ function OrderItemRow({
     >
       {/* Image */}
       <div
-        className="relative border-round overflow-hidden flex-shrink-0"
+        className="border-round overflow-hidden flex-shrink-0"
         style={{ width: '80px', height: '80px' }}
       >
-          {imageUrl ? (
-            <Image
-              src={imageUrl}
-              alt={imageAlt}
-              fill
-              className="object-cover"
-              sizes="80px"
-            />
-          ) : (
-            <div className="w-full h-full product-image-placeholder">
-              <i className="pi pi-image" />
-            </div>
-          )}
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={imageAlt}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full product-image-placeholder">
+            <i className="pi pi-image" />
+          </div>
+        )}
       </div>
 
       {/* Info */}
@@ -406,15 +626,21 @@ function OrderItemRow({
           </span>
           <span>×</span>
           <span data-testid={`${testId}-price`}>
-            {formatPrice(item.unitPrice)}
+            {formatPrice(item.discountPercent > 0 ? item.unitPriceWithDiscount : item.unitPrice)}
           </span>
+          {item.discountPercent > 0 && (
+            <span className="line-through">{formatPrice(item.unitPrice)}</span>
+          )}
+          {item.discountPercent > 0 && (
+            <span className="text-green-600">-{item.discountPercent}%</span>
+          )}
         </div>
       </div>
 
       {/* Subtotal */}
       <div className="flex align-items-center">
         <span className="font-semibold" data-testid={`${testId}-subtotal`}>
-          {formatPrice(item.subtotal)}
+          {formatPrice(item.lineTotal || item.subtotal)}
         </span>
       </div>
     </div>

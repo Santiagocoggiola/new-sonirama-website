@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
@@ -12,7 +12,7 @@ import { Tag } from 'primereact/tag';
 import { InputSwitch } from 'primereact/inputswitch';
 import { Dialog } from 'primereact/dialog';
 import { ProgressSpinner } from 'primereact/progressspinner';
-import { useGetProductsQuery, useDeleteProductMutation, useUpdateProductMutation } from '@/store/api/productsApi';
+import { useLazyGetProductsQuery, useDeleteProductMutation, useUpdateProductMutation } from '@/store/api/productsApi';
 import { formatPrice } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { showToast } from '@/components/ui/toast-service';
@@ -30,15 +30,42 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [productToDelete, setProductToDelete] = useState<ProductDto | null>(null);
-  
-  const { data, isLoading, isError } = useGetProductsQuery({
-    query: searchQuery || undefined,
-    pageSize: 50,
-  });
+  const [items, setItems] = useState<Array<ProductDto | null>>([]);
+  const [didLoad, setDidLoad] = useState(false);
+  const [rows, setRows] = useState(25);
+
+  const [loadProducts, { isLoading, isFetching, isError }] = useLazyGetProductsQuery();
   const [deleteProduct, { isLoading: isDeleting }] = useDeleteProductMutation();
   const [updateProduct, { isLoading: isUpdating }] = useUpdateProductMutation();
 
-  const products = data?.items ?? [];
+  const ensureItemsLength = useCallback((nextTotal: number) => {
+    setItems((prev) => {
+      if (prev.length === nextTotal) return prev;
+      return Array.from({ length: nextTotal }, (_, idx) => prev[idx] ?? null);
+    });
+  }, []);
+
+  const loadPage = useCallback(
+    async (pageToLoad: number, first: number, pageSize: number) => {
+      const result = await loadProducts({
+        query: searchQuery || undefined,
+        page: pageToLoad,
+        pageSize,
+      }).unwrap();
+
+      setRows(result.pageSize);
+      ensureItemsLength(result.totalCount);
+      setItems((prev) => {
+        const next = prev.length === result.totalCount ? [...prev] : Array(result.totalCount).fill(null);
+        result.items.forEach((item, index) => {
+          next[first + index] = item;
+        });
+        return next;
+      });
+      setDidLoad(true);
+    },
+    [ensureItemsLength, loadProducts, searchQuery]
+  );
 
   const handleCreateProduct = () => {
     router.push('/admin/products/new');
@@ -49,86 +76,110 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
   };
 
   // Column templates
-  const nameTemplate = (product: ProductDto) => (
-    <span className="font-medium" data-testid={`${testId}-product-${product.id}-name`}>
-      {product.name}
+  const nameTemplate = (product: ProductDto | null) => (
+    <span
+      className="font-medium"
+      data-testid={product ? `${testId}-product-${product.id}-name` : undefined}
+    >
+      {product?.name || '...'}
     </span>
   );
 
-  const categoryTemplate = (product: ProductDto) => (
-    <span data-testid={`${testId}-product-${product.id}-category`}>
-      {product.category || '-'}
+  const categoryTemplate = (product: ProductDto | null) => (
+    <span data-testid={product ? `${testId}-product-${product.id}-category` : undefined}>
+      {product?.category || (product ? '-' : '...')}
     </span>
   );
 
-  const priceTemplate = (product: ProductDto) => (
-    <span data-testid={`${testId}-product-${product.id}-price`}>
-      {formatPrice(product.price)}
+  const priceTemplate = (product: ProductDto | null) => (
+    <span data-testid={product ? `${testId}-product-${product.id}-price` : undefined}>
+      {product ? formatPrice(product.price) : '...'}
     </span>
   );
 
-  const statusTemplate = (product: ProductDto) => (
+  const statusTemplate = (product: ProductDto | null) => (
     <div className="flex align-items-center gap-2">
-      <Tag
-        severity={product.isActive ? 'success' : 'danger'}
-        value={product.isActive ? 'Activo' : 'Inactivo'}
-        data-testid={`${testId}-product-${product.id}-status`}
-      />
-      <InputSwitch
-        checked={product.isActive}
-        onChange={async (e) => {
-          try {
-            await updateProduct({
-              id: product.id,
-              body: {
-                name: product.name,
-                description: product.description || undefined,
-                price: product.price,
-                currency: product.currency,
-                category: product.category || undefined,
-                isActive: e.value,
-              },
-            }).unwrap();
-            showToast({ severity: 'success', summary: e.value ? 'Producto activado' : 'Producto desactivado' });
-          } catch {
-            showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el producto' });
-          }
-        }}
-        disabled={isUpdating}
-      />
+      {product ? (
+        <>
+          <Tag
+            severity={product.isActive ? 'success' : 'danger'}
+            value={product.isActive ? 'Activo' : 'Inactivo'}
+            data-testid={`${testId}-product-${product.id}-status`}
+          />
+          <InputSwitch
+            checked={product.isActive}
+            onChange={async (e) => {
+              const nextValue = e.value;
+              setItems((prev) => prev.map((item) => (item?.id === product.id ? { ...item, isActive: nextValue } : item)));
+              try {
+                await updateProduct({
+                  id: product.id,
+                  body: {
+                    name: product.name,
+                    description: product.description || undefined,
+                    price: product.price,
+                    currency: product.currency,
+                    category: product.category || undefined,
+                    isActive: nextValue,
+                  },
+                }).unwrap();
+                showToast({ severity: 'success', summary: nextValue ? 'Producto activado' : 'Producto desactivado' });
+              } catch {
+                setItems((prev) => prev.map((item) => (item?.id === product.id ? { ...item, isActive: product.isActive } : item)));
+                showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo actualizar el producto' });
+              }
+            }}
+            disabled={isUpdating}
+          />
+        </>
+      ) : (
+        <span className="text-color-secondary">...</span>
+      )}
     </div>
   );
 
-  const actionsTemplate = (product: ProductDto) => (
+  const actionsTemplate = (product: ProductDto | null) => (
     <div className="flex gap-2">
-      <Button
-        id={`${testId}-product-${product.id}-edit`}
-        data-testid={`${testId}-product-${product.id}-edit`}
-        icon="pi pi-pencil"
-        rounded
-        text
-        severity="secondary"
-        onClick={() => handleEditProduct(product)}
-        aria-label="Editar"
-        tooltip="Editar"
-        tooltipOptions={{ position: 'top' }}
-      />
-      <Button
-        id={`${testId}-product-${product.id}-delete`}
-        data-testid={`${testId}-product-${product.id}-delete`}
-        icon="pi pi-trash"
-        rounded
-        text
-        severity="danger"
-        onClick={() => setProductToDelete(product)}
-        aria-label="Eliminar"
-        tooltip="Eliminar"
-        tooltipOptions={{ position: 'top' }}
-      />
+      {product ? (
+        <>
+          <Button
+            id={`${testId}-product-${product.id}-edit`}
+            data-testid={`${testId}-product-${product.id}-edit`}
+            icon="pi pi-pencil"
+            rounded
+            text
+            severity="secondary"
+            onClick={() => handleEditProduct(product)}
+            aria-label="Editar"
+            tooltip="Editar"
+            tooltipOptions={{ position: 'top' }}
+          />
+          <Button
+            id={`${testId}-product-${product.id}-delete`}
+            data-testid={`${testId}-product-${product.id}-delete`}
+            icon="pi pi-trash"
+            rounded
+            text
+            severity="danger"
+            onClick={() => setProductToDelete(product)}
+            aria-label="Eliminar"
+            tooltip="Eliminar"
+            tooltipOptions={{ position: 'top' }}
+          />
+        </>
+      ) : (
+        <span className="text-color-secondary">...</span>
+      )}
     </div>
   );
 
-  if (isLoading) {
+  useEffect(() => {
+    setItems([]);
+    setDidLoad(false);
+    loadPage(1, 0, rows).catch(() => setDidLoad(true));
+  }, [loadPage, rows, searchQuery]);
+
+  if (isLoading && !didLoad) {
     return (
       <div
         id={`${testId}-loading`}
@@ -178,7 +229,7 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
       </div>
 
       {/* Table */}
-      {products.length === 0 ? (
+      {items.length === 0 && didLoad ? (
         <EmptyState
           testId={`${testId}-empty`}
           icon="pi pi-box"
@@ -191,14 +242,28 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
         />
       ) : (
         <DataTable
-          value={products}
+          value={items}
           dataKey="id"
-          paginator
-          rows={10}
-          rowsPerPageOptions={[10, 25, 50]}
           className="surface-card border-round"
           stripedRows
           scrollable
+          lazy
+          scrollHeight="600px"
+          loading={isFetching}
+          virtualScrollerOptions={{
+            lazy: true,
+            itemSize: 56,
+            onLazyLoad: (event) => {
+              const first = event.first ?? 0;
+              const pageSize = event.rows ?? rows;
+              const page = Math.floor(first / pageSize) + 1;
+              const isLoaded = items[first] !== null && items[first] !== undefined;
+              if (!isLoaded) {
+                loadPage(page, first, pageSize).catch(() => undefined);
+              }
+            },
+            showLoader: true,
+          }}
         >
           <Column
             field="name"
@@ -257,6 +322,7 @@ export function AdminProductsTable({ testId = 'admin-products-table' }: AdminPro
               if (!productToDelete) return;
               try {
                 await deleteProduct(productToDelete.id).unwrap();
+                setItems((prev) => prev.filter((item) => item?.id !== productToDelete.id));
                 showToast({ severity: 'success', summary: 'Producto eliminado' });
               } catch {
                 showToast({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar el producto' });

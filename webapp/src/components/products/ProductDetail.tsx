@@ -11,6 +11,9 @@ import { Skeleton } from 'primereact/skeleton';
 import { Divider } from 'primereact/divider';
 import { BreadCrumb } from 'primereact/breadcrumb';
 import { useGetProductByIdQuery } from '@/store/api/productsApi';
+import { useGetMyProfileQuery } from '@/store/api/usersApi';
+import { useAppSelector } from '@/store/hooks';
+import { selectIsAuthenticated } from '@/store/slices/authSlice';
 import { useCart } from '@/hooks/useCart';
 import { buildAssetUrl, formatPrice, isLocalAssetHost } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -29,6 +32,7 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
   const router = useRouter();
   const [quantity, setQuantity] = useState(1);
   const { addItem, isLoading: isAddingToCart } = useCart();
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   const {
     data: product,
@@ -36,6 +40,8 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
     isError,
     error,
   } = useGetProductByIdQuery(productId);
+
+  const { data: profile } = useGetMyProfileQuery(undefined, { skip: !isAuthenticated });
 
   const handleAddToCart = async () => {
     if (product) {
@@ -143,10 +149,24 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
 
   const breadcrumbItems = useMemo(() => {
     const items = [] as { label: string }[];
-    if (product.category) items.push({ label: product.category });
+    const categoryLabel = product.categories && product.categories.length > 0
+      ? product.categories[0]?.name
+      : product.category && !/^[0-9a-fA-F-]{36}$/.test(product.category)
+        ? product.category
+        : null;
+    if (categoryLabel) items.push({ label: categoryLabel });
     items.push({ label: product.name });
     return items;
   }, [product]);
+
+  const userDiscountPercent = profile?.discountPercent ?? 0;
+  const showDiscount = userDiscountPercent > 0;
+  const discountedPrice = product.price * (1 - (userDiscountPercent / 100));
+  const categories = product.categories && product.categories.length > 0
+    ? product.categories.map((cat) => cat.name)
+    : product.category && !/^[0-9a-fA-F-]{36}$/.test(product.category)
+      ? [product.category]
+      : [];
 
   return (
     <div id={testId} data-testid={testId}>
@@ -210,14 +230,27 @@ export function ProductDetail({ productId, testId = 'product-detail' }: ProductD
               {product.name}
             </h1>
 
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {categories.map((category) => (
+                  <Tag key={`${product.id}-${category}`} value={category} severity="info" className="text-xs" />
+                ))}
+              </div>
+            )}
+
             {/* Price */}
             <div className="flex align-items-center gap-3 mt-4">
               <span
                 className="text-3xl font-bold text-primary"
                 data-testid={`${testId}-price`}
               >
-                {formatPrice(product.price)}
+                {formatPrice(showDiscount ? discountedPrice : product.price)}
               </span>
+              {showDiscount && (
+                <span className="text-lg text-color-secondary line-through" data-testid={`${testId}-price-original`}>
+                  {formatPrice(product.price)}
+                </span>
+              )}
             </div>
 
             <Divider />
